@@ -74,7 +74,7 @@ func TestXCommand(t *testing.T) {
 }
 
 func TestExecutor(t *testing.T) {
-	var output bytes.Buffer
+	output := &bytes.Buffer{}
 
 	tests := []struct {
 		name     string
@@ -83,9 +83,9 @@ func TestExecutor(t *testing.T) {
 		expected string
 	}{
 		{
-			name:     "simple",
-			input:    "line1\ntest",
-			cmds:     []Command{NewRegexpCommand('x', regexp.MustCompile("ine")), PrintCommand{&output}},
+			name:  "simple",
+			input: "line1\ntest",
+			cmds:  []Command{NewRegexpCommand('x', regexp.MustCompile("ine")), PrintCommand{output}},
 			expected: "ine",
 		},
 	}
@@ -96,10 +96,12 @@ func TestExecutor(t *testing.T) {
 			buf := strings.NewReader(tc.input)
 
 			output.Reset()
-			ex := Executor{tc.cmds}
+			ex := Executor{commands: tc.cmds}
 			ex.Go(buf)
 
 			s := output.String()
+			t.Logf("Expected '%s' and got '%s'", tc.expected, s)
+			t.Logf("Expected '%s' and got '%s'", tc.expected, s)
 			if s != tc.expected {
 				t.Fatalf("Expected '%s' but got '%s'", tc.expected, s)
 			}

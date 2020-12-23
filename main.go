@@ -7,6 +7,7 @@ import (
 	"os"
 	"regexp"
 	"strings"
+	"sync"
 
 	"github.com/ogier/pflag"
 )
@@ -66,7 +67,7 @@ func processFile(file *os.File, commands string) error {
 		return err
 	}
 
-	ex := Executor{cmds}
+	ex := Executor{commands: cmds}
 	ex.Go(file)
 
 	return nil
@@ -74,6 +75,7 @@ func processFile(file *os.File, commands string) error {
 
 type Executor struct {
 	commands []Command
+	wg       sync.WaitGroup
 }
 
 type ReaderAt interface {
@@ -113,17 +115,25 @@ func (ex Executor) Go(input ReaderAt) {
 	//inputRange is the range of characters that stage i can read
 	inputRange := make([]Range, len(ex.commands))
 
+	ex.wg.Add(len(ex.commands))
+
 	// Later stages read from a pipe
 	for stage := 1; stage < len(ex.commands); stage++ {
 		go func(stage int) {
+			defer ex.wg.Done()
 			for rnge := range chans[stage-1] {
+				fmt.Printf("Stage %d is reading range %d-%d\n", stage, rnge.Start, rnge.End)
 				// setup new sectionreader to read starting
 				// at what the last range was but also + rnge.start
 				srdr := inputRange[stage-1].Subrange(rnge.Start, rnge.End).SectionReader(input)
 				rdr := bufio.NewReader(srdr)
 				ex.commands[stage].Do(rdr, func(start, end int) {
+					fmt.Printf("Stage %d is sending range %d-%d\n", stage, start, end)
 					chans[stage] <- Range{start, end}
 				})
+			}
+			if stage < len(chans) {
+				close(chans[stage])
 			}
 		}(stage)
 	}
@@ -132,9 +142,13 @@ func (ex Executor) Go(input ReaderAt) {
 
 	rdr := bufio.NewReader(input)
 	ex.commands[0].Do(rdr, func(start, end int) {
+		ex.wg.Done()
+		fmt.Printf("Stage %d is sending range %d-%d\n", 0, start, end)
 		chans[0] <- Range{start, end}
+		close(chans[0])
 	})
 
+	ex.wg.Wait()
 }
 
 func (ex Executor) addPrintCommandIfNeeded(commands []Command) (result []Command) {
@@ -253,7 +267,7 @@ type GCommand struct {
 func (c GCommand) Do(rnge io.RuneReader, match func(start, end int)) error {
 	/*
 		if c.RegexpCommand.regexp.Match(rnge) {
-			//TODO:  Retuirn the full range. We should just pass a range here instead of the reader.
+			//TODO:  Return the full range. We should just pass a range here instead of the reader.
 			return nil
 		}
 
