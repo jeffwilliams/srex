@@ -7,16 +7,59 @@ import (
 	"testing"
 )
 
+func TestLengthOfReader(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+	}{
+		{
+			name:  "empty",
+			input: "",
+		},
+		{
+			name:  "single",
+			input: "l",
+		},
+		{
+			name:  "normal",
+			input: "snarfle",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			buf := []byte(tc.input)
+			rdr := bytes.NewReader(buf)
+
+			l, err := lengthOfReaderAt(rdr)
+			if err != nil {
+				t.Fatalf("Error getting length of reader: '%v'", err)
+			}
+
+			if l != int64(len(buf)) {
+				t.Fatalf("Actual '%d' does not match expected '%d'", l, len(buf))
+			}
+		})
+	}
+
+}
 func TestPrintCommand(t *testing.T) {
 
-	buf := bytes.NewBuffer([]byte("test!"))
+	buf := []byte("test!")
+	rdr := bytes.NewReader(buf)
 
 	var out bytes.Buffer
 	p := PrintCommand{&out}
-	p.Do(buf, func(start, end int) {})
+
+	l, err := lengthOfReaderAt(rdr)
+	if err != nil {
+		t.Fatalf("Error getting length of reader: '%v'", err)
+	}
+
+	p.Do(rdr, 0, l, func(start, end int64) {})
 
 	if out.String() != "test!" {
-		t.Fatalf("Actual does not match expected: '%s'\n", out.String())
+		t.Fatalf("Actual does not match expected: '%s'", out.String())
 	}
 
 }
@@ -59,9 +102,15 @@ func TestXCommand(t *testing.T) {
 				t.Fatalf("Error making regex: %s\n", err)
 			}
 
-			buf := bytes.NewBuffer([]byte(tc.input))
+			buf := []byte(tc.input)
+			rdr := bytes.NewReader(buf)
 
-			c.Do(buf, func(start, end int) {
+			l, err := lengthOfReaderAt(rdr)
+			if err != nil {
+				t.Fatalf("Error getting length of reader: '%v'", err)
+			}
+
+			c.Do(rdr, 0, l, func(start, end int64) {
 				if tc.failed {
 					t.Fatalf("Do called when the match failed\n")
 				}
@@ -83,10 +132,27 @@ func TestExecutor(t *testing.T) {
 		expected string
 	}{
 		{
-			name:  "simple",
-			input: "line1\ntest",
-			cmds:  []Command{NewRegexpCommand('x', regexp.MustCompile("ine")), PrintCommand{output}},
+			name:     "simple",
+			input:    "line1\ntest",
+			cmds:     []Command{NewRegexpCommand('x', regexp.MustCompile("ine")), PrintCommand{output}},
 			expected: "ine",
+		},
+		{
+			name:  "x matches multiple lines",
+			input: "line1\ntest\nline2",
+			cmds: []Command{
+				NewRegexpCommand('x', regexp.MustCompile(".*line.*")),
+				PrintCommand{output}},
+			expected: "line1line2",
+		},
+		{
+			name:  "x then g",
+			input: "line1\nline2\nline3",
+			cmds: []Command{
+				NewRegexpCommand('x', regexp.MustCompile(".*line.*")),
+				NewRegexpCommand('g', regexp.MustCompile("1|3")),
+				PrintCommand{output}},
+			expected: "line1line3",
 		},
 	}
 
@@ -96,7 +162,7 @@ func TestExecutor(t *testing.T) {
 			buf := strings.NewReader(tc.input)
 
 			output.Reset()
-			ex := Executor{commands: tc.cmds}
+			ex := NewExecutor(tc.cmds)
 			ex.Go(buf)
 
 			s := output.String()

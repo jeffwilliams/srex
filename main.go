@@ -1,13 +1,11 @@
 package main
 
 import (
-	"bufio"
 	"fmt"
 	"io"
 	"os"
 	"regexp"
 	"strings"
-	"sync"
 
 	"github.com/ogier/pflag"
 )
@@ -67,108 +65,29 @@ func processFile(file *os.File, commands string) error {
 		return err
 	}
 
-	ex := Executor{commands: cmds}
+	ex := NewExecutor(cmds)
 	ex.Go(file)
 
 	return nil
 }
 
-type Executor struct {
-	commands []Command
-	wg       sync.WaitGroup
-}
-
-type ReaderAt interface {
-	ReadAt(p []byte, off int64) (n int, err error)
-	Read(p []byte) (n int, err error)
-}
-
-// Idea: have two pipelines that are connected:
-// filtering pipeline -> action pipeline
-//
-// filtering pipeline is connected using a series of channels that pass successively more restrictive ranges
-//
-// action pipeline is connected using a series of channels that pass byte buffers for more manipulation
-//
-// Between the two is a connector that reads a range and converts it to a buffer.
-
-func (ex Executor) Go(input ReaderAt) {
-
-	ex.commands = ex.addPrintCommandIfNeeded(ex.commands)
-
-	// Need a runereader and
-	// also a way to seek
-	//bufio.Reader is a RuneReader on a reader
-	// io.SectionReader is a reader on a readerat that limits how much to read
-
-	// Setup a pipeline for the commands
-	var chans []chan Range
-	if len(ex.commands) > 1 {
-		chans = make([]chan Range, len(ex.commands)-1)
-		for i := range chans {
-			chans[i] = make(chan Range)
-		}
+func lengthOfReaderAt(r io.ReaderAt) (int64, error) {
+	if s, ok := r.(io.Seeker); ok {
+		return s.Seek(0, io.SeekEnd)
 	}
 
-	fmt.Printf("%d commands\n", len(ex.commands))
-
-	//inputRange is the range of characters that stage i can read
-	inputRange := make([]Range, len(ex.commands))
-
-	ex.wg.Add(len(ex.commands))
-
-	// Later stages read from a pipe
-	for stage := 1; stage < len(ex.commands); stage++ {
-		go func(stage int) {
-			defer ex.wg.Done()
-			for rnge := range chans[stage-1] {
-				fmt.Printf("Stage %d is reading range %d-%d\n", stage, rnge.Start, rnge.End)
-				// setup new sectionreader to read starting
-				// at what the last range was but also + rnge.start
-				srdr := inputRange[stage-1].Subrange(rnge.Start, rnge.End).SectionReader(input)
-				rdr := bufio.NewReader(srdr)
-				ex.commands[stage].Do(rdr, func(start, end int) {
-					fmt.Printf("Stage %d is sending range %d-%d\n", stage, start, end)
-					chans[stage] <- Range{start, end}
-				})
-			}
-			if stage < len(chans) {
-				close(chans[stage])
-			}
-		}(stage)
-	}
-
-	// First stage reads from the reader directly
-
-	rdr := bufio.NewReader(input)
-	ex.commands[0].Do(rdr, func(start, end int) {
-		ex.wg.Done()
-		fmt.Printf("Stage %d is sending range %d-%d\n", 0, start, end)
-		chans[0] <- Range{start, end}
-		close(chans[0])
-	})
-
-	ex.wg.Wait()
-}
-
-func (ex Executor) addPrintCommandIfNeeded(commands []Command) (result []Command) {
-	result = append(commands, PrintCommand{})
-	return
+	// Use the readerAtSize function to determine size. First port it.
+	return 0, fmt.Errorf("Can't determine length of ReaderAt since it is not a Seeker")
 }
 
 type Range struct {
-	Start, End int
+	Start, End int64
 }
 
-func (r Range) IsCompleteRange() bool {
-	return r.Start == -1 && r.End == -1
-}
+var EmptyRange = Range{}
 
-func (r Range) Subrange(start, end int) Range {
-	if r.IsCompleteRange() {
-		return Range{Start: start, End: end}
-	}
-	return Range{Start: r.Start + start, End: r.End + end}
+func (r Range) IsEmpty() bool {
+	return r.Start == r.End && r.Start == 0
 }
 
 func (r Range) SectionReader(input io.ReaderAt) *io.SectionReader {
@@ -223,72 +142,49 @@ func parseCommandRegexp(command string) (re *regexp.Regexp, err error) {
 	return
 }
 
-type Command interface {
-	Do(rnge io.RuneReader, match func(start, end int)) error
-}
-
-type RegexpCommand struct {
-	regexp *regexp.Regexp
-	//label  rune // "name" of the command: x, y, g..
-}
-
-func NewRegexpCommand(label rune, re *regexp.Regexp) Command {
-	switch label {
-	case 'x':
-		return &XCommand{RegexpCommand{regexp: re}}
+func readRange(data io.ReaderAt, start, end int64) (buf []byte, err error) {
+	buf = make([]byte, end-start)
+	_, err = data.ReadAt(buf, start)
+	if err == io.EOF {
+		err = nil
 	}
-	return nil
+	return
 }
 
-type XCommand struct {
-	RegexpCommand
-}
+/*
+// Determine the size of a ReaderAt using a binary search. Given that file
+// offsets are no larger than int64, there is an upper limit of 64 iterations
+// before the EOF is found.
+func readerAtSize(rd io.ReaderAt) (pos int64, err error) {
+	defer errs.Recover(&err)
 
-// rnge should be a reader that will only read as much as the range that the command
-// should operate on. This can be achieved using a LimitReader
-// Any matches found will be passed to the match command
-func (c XCommand) Do(rnge io.RuneReader, match func(start, end int)) error {
-	locs := c.RegexpCommand.regexp.FindReaderSubmatchIndex(rnge)
-	if locs == nil {
-		return nil
-	}
-
-	match(locs[0], locs[1])
-	return nil
-}
-
-type GCommand struct {
-	RegexpCommand
-}
-
-// rnge should be a reader that will only read as much as the range that the command
-// should operate on. This can be achieved using a LimitReader
-// Any matches found will be passed to the match command
-func (c GCommand) Do(rnge io.RuneReader, match func(start, end int)) error {
-	/*
-		if c.RegexpCommand.regexp.Match(rnge) {
-			//TODO:  Return the full range. We should just pass a range here instead of the reader.
-			return nil
+	// Function to check if the given position is at EOF
+	buf := make([]byte, 2)
+	checkEOF := func(pos int64) int {
+		if pos > 0 {
+			cnt, err := rd.ReadAt(buf[:2], pos-1)
+			errs.Panic(errs.Ignore(err, io.EOF))
+			return 1 - cnt // RetVal[Cnt] = {0: +1, 1: 0, 2: -1}
+		} else { // Special case where position is zero
+			cnt, err := rd.ReadAt(buf[:1], pos-0)
+			errs.Panic(errs.Ignore(err, io.EOF))
+			return 0 - cnt // RetVal[Cnt] = {0: 0, 1: -1}
 		}
-
-		match(locs[0], locs[1])
-	*/
-	return nil
-}
-
-type PrintCommand struct{ Out io.Writer }
-
-func (p PrintCommand) Do(rnge io.RuneReader, match func(start, end int)) error {
-	reader, ok := rnge.(io.Reader)
-	if !ok {
-		return fmt.Errorf("PrintCommand.Do was passed something that is not an io.Reader")
 	}
 
-	if p.Out == nil {
-		p.Out = os.Stdout
+	// Obtain the size via binary search O(log n) => 64 iterations
+	posMin, posMax := int64(0), int64(math.MaxInt64)
+	for posMax >= posMin {
+		pos = (posMax + posMin) / 2
+		switch checkEOF(pos) {
+		case -1: // Below EOF
+			posMin = pos + 1
+		case 0: // At EOF
+			return pos, nil
+		case +1: // Above EOF
+			posMax = pos - 1
+		}
 	}
-
-	io.Copy(p.Out, reader)
-
-	return nil
+	panic(errs.New("EOF is in a transient state"))
 }
+*/
