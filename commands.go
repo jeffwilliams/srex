@@ -22,6 +22,8 @@ func NewRegexpCommand(label rune, re *regexp.Regexp) Command {
 		return &XCommand{RegexpCommand{regexp: re}}
 	case 'g':
 		return &GCommand{RegexpCommand{regexp: re}}
+	case 'y':
+		return &YCommand{RegexpCommand{regexp: re}}
 	default:
 		panic(fmt.Sprintf("NewRegexpCommand: called with invalid command rune %c", label))
 	}
@@ -73,14 +75,20 @@ func (c YCommand) Do(data io.ReaderAt, start, end int64, match func(start, end i
 		match(start, end)
 		return nil
 	}
+	
+	dbg("YCommand.Do: %d matches\n", len(matches))
 
 	lastIndex := start
 	for _, locs := range matches {
-		dbg("YCommand.Do: match at %d-%d\n", locs[0], locs[1])
+		dbg("YCommand.Do: re match at %d-%d\n", locs[0], locs[1])
+		dbg("YCommand.Do: sending match %d-%d\n", lastIndex, lastIndex+int64(locs[0]))
 
-		//match(start+int64(locs[0]), start+int64(locs[1]))
-		match(lastIndex, lastIndex+int64(locs[0]))
+		match(start+lastIndex, start+int64(locs[0]))
 		lastIndex = int64(locs[1])
+	}
+
+	if lastIndex != end {
+		match(lastIndex, end)
 	}
 
 	return nil

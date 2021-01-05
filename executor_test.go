@@ -170,10 +170,42 @@ func TestExecutor(t *testing.T) {
 			expected: "13",
 		},
 		{
-			name:  "no commands",
-			input: "line1\nline2\nline3",
-			cmds: []Command{},
+			name:     "no commands",
+			input:    "line1\nline2\nline3",
+			cmds:     []Command{},
 			expected: "line1\nline2\nline3",
+		},
+		{
+			name:  "y match",
+			input: "line1\ntest\nline2",
+			cmds: []Command{
+				NewRegexpCommand('y', regexp.MustCompile("test")),
+				PrintCommand{output}},
+			expected: "line1\n\nline2",
+		},
+		{
+			name:  "y no match",
+			input: "line1\n",
+			cmds: []Command{
+				NewRegexpCommand('y', regexp.MustCompile("test")),
+				PrintCommand{output}},
+			expected: "line1\n",
+		},
+		{
+			name:  "y multi match",
+			input: "line1\ntest\nline2\ntest",
+			cmds: []Command{
+				NewRegexpCommand('y', regexp.MustCompile("test")),
+				PrintCommand{output}},
+			expected: "line1\n\nline2\n",
+		},
+		{
+			name:  "y multi match 2",
+			input: "line1\ntest\nline2\ntestarr",
+			cmds: []Command{
+				NewRegexpCommand('y', regexp.MustCompile("test")),
+				PrintCommand{output}},
+			expected: "line1\n\nline2\narr",
 		},
 	}
 
