@@ -138,6 +138,12 @@ func TestExecutor(t *testing.T) {
 			expected: "ine",
 		},
 		{
+			name:     "simple noprint",
+			input:    "line1\ntest",
+			cmds:     []Command{NewRegexpCommand('x', regexp.MustCompile("ine"))},
+			expected: "ine",
+		},
+		{
 			name:  "x matches multiple lines",
 			input: "line1\ntest\nline2",
 			cmds: []Command{
@@ -154,6 +160,21 @@ func TestExecutor(t *testing.T) {
 				PrintCommand{output}},
 			expected: "line1line3",
 		},
+		{
+			name:  "x then x",
+			input: "line1\nline2\nline3",
+			cmds: []Command{
+				NewRegexpCommand('x', regexp.MustCompile(".*line.*")),
+				NewRegexpCommand('x', regexp.MustCompile("1|3")),
+				PrintCommand{output}},
+			expected: "13",
+		},
+		{
+			name:  "no commands",
+			input: "line1\nline2\nline3",
+			cmds: []Command{},
+			expected: "line1\nline2\nline3",
+		},
 	}
 
 	for _, tc := range tests {
@@ -163,6 +184,7 @@ func TestExecutor(t *testing.T) {
 
 			output.Reset()
 			ex := NewExecutor(tc.cmds)
+			ex.Output = output
 			ex.Go(buf)
 
 			s := output.String()

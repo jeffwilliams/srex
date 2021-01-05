@@ -136,9 +136,7 @@ func parseCommandRegexp(command string) (re *regexp.Regexp, err error) {
 	}
 
 	reText := command[1 : len(command)-1]
-	fmt.Printf("re text: %s\n", reText)
-
-	re, err = regexp.Compile(command[1 : len(command)-1])
+	re, err = regexp.Compile(reText)
 	return
 }
 

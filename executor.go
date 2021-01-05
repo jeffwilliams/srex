@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"io"
 	"sync"
 )
@@ -14,6 +13,7 @@ type Executor struct {
 	chans       []chan Range
 	input       io.ReaderAt
 	inputLength int64
+	Output      io.Writer
 }
 
 func NewExecutor(commands []Command) *Executor {
@@ -35,7 +35,7 @@ func (ex *Executor) Go(input io.ReaderAt) error {
 		return err
 	}
 
-	fmt.Printf("%d commands\n", len(ex.commands))
+	dbg("%d commands\n", len(ex.commands))
 
 	ex.wg.Add(len(ex.commands))
 
@@ -69,17 +69,16 @@ func (ex *Executor) prepareToGo(input io.ReaderAt) error {
 func (ex *Executor) doCommandForStage(stage int) {
 	defer ex.wg.Done()
 
-	fmt.Printf("Starting stage %d\n", stage)
+	dbg("Starting stage %d\n", stage)
 
 	if stage == 0 {
 		// First stage reads from the reader directly
-		ex.commands[stage].Do(ex.input, 0, ex.inputLength, ex.writeRangeToChan(ex.chans[0]))
+		ex.commands[stage].Do(ex.input, 0, ex.inputLength, ex.writeRangeToChan(ex.firstChan()))
 	} else {
 		// Later stages read from a pipe
 		for rnge := range ex.chans[stage-1] {
-			fmt.Printf("Stage %d is reading range %d-%d\n", stage, rnge.Start, rnge.End)
-			fmt.Printf("commands[stage] = %p\n", ex.commands[stage])
-			
+			dbg("Stage %d is reading range %d-%d\n", stage, rnge.Start, rnge.End)
+
 			fn := nop
 			if stage < len(ex.commands)-1 {
 				fn = ex.writeRangeToChan(ex.chans[stage])
@@ -93,6 +92,13 @@ func (ex *Executor) doCommandForStage(stage int) {
 	}
 }
 
+func (ex *Executor) firstChan() chan Range {
+	if len(ex.chans) > 0 {
+		return ex.chans[0]
+	}
+	return nil
+}
+
 func (ex *Executor) makeChans(count int) {
 	// Setup a pipeline for the commands
 
@@ -103,8 +109,12 @@ func (ex *Executor) makeChans(count int) {
 }
 
 func (ex Executor) writeRangeToChan(c chan Range) func(start, end int64) {
+	if c == nil {
+		return nop
+	}
+
 	return func(start, end int64) {
-		fmt.Printf("Stage is sending range %d-%d\n", start, end)
+		dbg("Stage is sending range %d-%d\n", start, end)
 		c <- Range{start, end}
 	}
 }
@@ -125,7 +135,7 @@ func (ex Executor) addPrintCommandIfNeeded(commands []Command) (result []Command
 
 	result = commands
 	if add {
-		result = append(commands, PrintCommand{})
+		result = append(commands, PrintCommand{ex.Output})
 	}
 	return
 }

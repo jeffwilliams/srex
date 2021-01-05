@@ -43,15 +43,46 @@ func (c XCommand) Do(data io.ReaderAt, start, end int64, match func(start, end i
 
 	matches := c.RegexpCommand.regexp.FindAllSubmatchIndex(buf, -1)
 	if matches == nil {
-		fmt.Printf("XCommand.Do: no matches\n")
+		dbg("XCommand.Do: no matches\n")
 		return nil
 	}
-	
+
 	for _, locs := range matches {
-		fmt.Printf("XCommand.Do: match at %d-%d\n", locs[0], locs[1])
+		dbg("XCommand.Do: match at %d-%d\n", locs[0], locs[1])
 		match(start+int64(locs[0]), start+int64(locs[1]))
-	} 
-	
+	}
+
+	return nil
+}
+
+// YCommand is like the sam editor's y command: loop over strings before, between, and after matches of this regexp
+type YCommand struct {
+	RegexpCommand
+}
+
+func (c YCommand) Do(data io.ReaderAt, start, end int64, match func(start, end int64)) error {
+	buf, err := readRange(data, start, end)
+
+	if err != nil {
+		return err
+	}
+
+	matches := c.RegexpCommand.regexp.FindAllSubmatchIndex(buf, -1)
+	if matches == nil {
+		dbg("YCommand.Do: no matches\n")
+		match(start, end)
+		return nil
+	}
+
+	lastIndex := start
+	for _, locs := range matches {
+		dbg("YCommand.Do: match at %d-%d\n", locs[0], locs[1])
+
+		//match(start+int64(locs[0]), start+int64(locs[1]))
+		match(lastIndex, lastIndex+int64(locs[0]))
+		lastIndex = int64(locs[1])
+	}
+
 	return nil
 }
 
@@ -64,12 +95,12 @@ func (c GCommand) Do(data io.ReaderAt, start, end int64, match func(start, end i
 	buf, err := readRange(data, start, end)
 
 	if err != nil {
-		fmt.Printf("GCommand.Do(%s): error %v\n", string(buf), err)
+		dbg("GCommand.Do(%s): error %v\n", string(buf), err)
 		return err
 	}
 
 	if c.RegexpCommand.regexp.Match(buf) {
-		fmt.Printf("GCommand.Do(%s): match at %d-%d\n", string(buf), start, end)
+		dbg("GCommand.Do(%s): match at %d-%d\n", string(buf), start, end)
 		match(start, end)
 	}
 
