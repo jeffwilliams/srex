@@ -24,6 +24,8 @@ func NewRegexpCommand(label rune, re *regexp.Regexp) Command {
 		return &GCommand{RegexpCommand{regexp: re}}
 	case 'y':
 		return &YCommand{RegexpCommand{regexp: re}}
+	case 'v':
+		return &VCommand{RegexpCommand{regexp: re}}
 	default:
 		panic(fmt.Sprintf("NewRegexpCommand: called with invalid command rune %c", label))
 	}
@@ -110,10 +112,35 @@ func (c GCommand) Do(data io.ReaderAt, start, end int64, match func(start, end i
 	if c.RegexpCommand.regexp.Match(buf) {
 		dbg("GCommand.Do(%s): match at %d-%d\n", string(buf), start, end)
 		match(start, end)
+		return nil
 	}
 
 	match(EmptyRange.Start, EmptyRange.End)
 
+	return nil
+}
+
+// VCommand is like the sam editor's y command: if the regexp doesn't match the range, output the range, otherwise output no range.
+type VCommand struct {
+	RegexpCommand
+}
+
+func (c VCommand) Do(data io.ReaderAt, start, end int64, match func(start, end int64)) error {
+	buf, err := readRange(data, start, end)
+	
+	if err != nil {
+		dbg("VCommand.Do(%s): error %v\n", string(buf), err)
+		return err
+	}
+	
+	if c.RegexpCommand.regexp.Match(buf) {
+		dbg("VCommand.Do(%s): match at %d-%d\n", string(buf), start, end)
+		match(EmptyRange.Start, EmptyRange.End)
+		return nil
+	}
+	
+	match(start, end)
+	
 	return nil
 }
 

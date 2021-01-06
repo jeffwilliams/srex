@@ -207,6 +207,51 @@ func TestExecutor(t *testing.T) {
 				PrintCommand{output}},
 			expected: "line1\n\nline2\narr",
 		},
+		{
+			name:  "empty input, nonempty x",
+			input: "",
+			cmds: []Command{
+				NewRegexpCommand('x', regexp.MustCompile("test")),
+				PrintCommand{output}},
+			expected: "",
+		},
+		{
+			name:  "empty input, empty x",
+			input: "",
+			cmds: []Command{
+				NewRegexpCommand('x', regexp.MustCompile("")),
+				PrintCommand{output}},
+			expected: "",
+		},
+		{
+			name:  "empty input, empty chain",
+			input: "",
+			cmds: []Command{
+				NewRegexpCommand('x', regexp.MustCompile("test")),
+				NewRegexpCommand('y', regexp.MustCompile("test")),
+				NewRegexpCommand('g', regexp.MustCompile("test")),
+				NewRegexpCommand('v', regexp.MustCompile("test")),
+				PrintCommand{output}},
+			expected: "",
+		},
+		{
+			name:  "all xml tags, except paragraphs",
+			input: "<html><body><p>test</p><b>bold</b><p>p2</p></body></html>",
+			cmds: []Command{
+				NewRegexpCommand('x', regexp.MustCompile("<[^>]+>")),
+				NewRegexpCommand('v', regexp.MustCompile("p>")),
+				PrintCommand{output}},
+			expected: "<html><body><b></b></body></html>",
+		},
+		{
+			name:  "all xml tags having more than one letter",
+			input: "<html><body><p>test</p><b>bold</b><p>p2</p></body></html>",
+			cmds: []Command{
+				NewRegexpCommand('x', regexp.MustCompile("<[^>]+>")),
+				NewRegexpCommand('g', regexp.MustCompile("[^</]{2}>")),
+				PrintCommand{output}},
+			expected: "<html><body></body></html>",
+		},
 	}
 
 	for _, tc := range tests {
