@@ -86,6 +86,10 @@ type Range struct {
 
 var EmptyRange = Range{}
 
+func emptyRange(start, end int64) bool {
+	return start == end
+}
+
 func (r Range) IsEmpty() bool {
 	return r.Start == r.End && r.Start == 0
 }

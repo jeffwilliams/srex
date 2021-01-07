@@ -14,6 +14,7 @@ type Executor struct {
 	input       io.ReaderAt
 	inputLength int64
 	Output      io.Writer
+	Sep         string
 }
 
 func NewExecutor(commands []Command) *Executor {
@@ -128,14 +129,14 @@ func (ex Executor) addPrintCommandIfNeeded(commands []Command) (result []Command
 	if len(commands) == 0 {
 		add = true
 	} else {
-		if _, ok := commands[len(commands)-1].(PrintCommand); !ok {
+		if _, ok := commands[len(commands)-1].(*PrintCommand); !ok {
 			add = true
 		}
 	}
 
 	result = commands
 	if add {
-		result = append(commands, PrintCommand{ex.Output})
+		result = append(commands, NewPrintCommand(ex.Output, ex.Sep))
 	}
 	return
 }

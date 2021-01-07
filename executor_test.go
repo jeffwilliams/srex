@@ -49,7 +49,7 @@ func TestPrintCommand(t *testing.T) {
 	rdr := bytes.NewReader(buf)
 
 	var out bytes.Buffer
-	p := PrintCommand{&out}
+	p := NewPrintCommand(&out, "")
 
 	l, err := lengthOfReaderAt(rdr)
 	if err != nil {
@@ -134,7 +134,7 @@ func TestExecutor(t *testing.T) {
 		{
 			name:     "simple",
 			input:    "line1\ntest",
-			cmds:     []Command{NewRegexpCommand('x', regexp.MustCompile("ine")), PrintCommand{output}},
+			cmds:     []Command{NewRegexpCommand('x', regexp.MustCompile("ine")), NewPrintCommand(output, "")},
 			expected: "ine",
 		},
 		{
@@ -148,7 +148,7 @@ func TestExecutor(t *testing.T) {
 			input: "line1\ntest\nline2",
 			cmds: []Command{
 				NewRegexpCommand('x', regexp.MustCompile(".*line.*")),
-				PrintCommand{output}},
+				NewPrintCommand(output, "")},
 			expected: "line1line2",
 		},
 		{
@@ -157,7 +157,7 @@ func TestExecutor(t *testing.T) {
 			cmds: []Command{
 				NewRegexpCommand('x', regexp.MustCompile(".*line.*")),
 				NewRegexpCommand('g', regexp.MustCompile("1|3")),
-				PrintCommand{output}},
+				NewPrintCommand(output, "")},
 			expected: "line1line3",
 		},
 		{
@@ -166,7 +166,7 @@ func TestExecutor(t *testing.T) {
 			cmds: []Command{
 				NewRegexpCommand('x', regexp.MustCompile(".*line.*")),
 				NewRegexpCommand('x', regexp.MustCompile("1|3")),
-				PrintCommand{output}},
+				NewPrintCommand(output, "")},
 			expected: "13",
 		},
 		{
@@ -180,7 +180,7 @@ func TestExecutor(t *testing.T) {
 			input: "line1\ntest\nline2",
 			cmds: []Command{
 				NewRegexpCommand('y', regexp.MustCompile("test")),
-				PrintCommand{output}},
+				NewPrintCommand(output, "")},
 			expected: "line1\n\nline2",
 		},
 		{
@@ -188,7 +188,7 @@ func TestExecutor(t *testing.T) {
 			input: "line1\n",
 			cmds: []Command{
 				NewRegexpCommand('y', regexp.MustCompile("test")),
-				PrintCommand{output}},
+				NewPrintCommand(output, "")},
 			expected: "line1\n",
 		},
 		{
@@ -196,7 +196,7 @@ func TestExecutor(t *testing.T) {
 			input: "line1\ntest\nline2\ntest",
 			cmds: []Command{
 				NewRegexpCommand('y', regexp.MustCompile("test")),
-				PrintCommand{output}},
+				NewPrintCommand(output, "")},
 			expected: "line1\n\nline2\n",
 		},
 		{
@@ -204,7 +204,7 @@ func TestExecutor(t *testing.T) {
 			input: "line1\ntest\nline2\ntestarr",
 			cmds: []Command{
 				NewRegexpCommand('y', regexp.MustCompile("test")),
-				PrintCommand{output}},
+				NewPrintCommand(output, "")},
 			expected: "line1\n\nline2\narr",
 		},
 		{
@@ -212,7 +212,7 @@ func TestExecutor(t *testing.T) {
 			input: "",
 			cmds: []Command{
 				NewRegexpCommand('x', regexp.MustCompile("test")),
-				PrintCommand{output}},
+				NewPrintCommand(output, "")},
 			expected: "",
 		},
 		{
@@ -220,7 +220,7 @@ func TestExecutor(t *testing.T) {
 			input: "",
 			cmds: []Command{
 				NewRegexpCommand('x', regexp.MustCompile("")),
-				PrintCommand{output}},
+				NewPrintCommand(output, "")},
 			expected: "",
 		},
 		{
@@ -231,7 +231,7 @@ func TestExecutor(t *testing.T) {
 				NewRegexpCommand('y', regexp.MustCompile("test")),
 				NewRegexpCommand('g', regexp.MustCompile("test")),
 				NewRegexpCommand('v', regexp.MustCompile("test")),
-				PrintCommand{output}},
+				NewPrintCommand(output, "")},
 			expected: "",
 		},
 		{
@@ -240,7 +240,7 @@ func TestExecutor(t *testing.T) {
 			cmds: []Command{
 				NewRegexpCommand('x', regexp.MustCompile("<[^>]+>")),
 				NewRegexpCommand('v', regexp.MustCompile("p>")),
-				PrintCommand{output}},
+				NewPrintCommand(output, "")},
 			expected: "<html><body><b></b></body></html>",
 		},
 		{
@@ -249,8 +249,25 @@ func TestExecutor(t *testing.T) {
 			cmds: []Command{
 				NewRegexpCommand('x', regexp.MustCompile("<[^>]+>")),
 				NewRegexpCommand('g', regexp.MustCompile("[^</]{2}>")),
-				PrintCommand{output}},
+				NewPrintCommand(output, "")},
 			expected: "<html><body></body></html>",
+		},
+		{
+			name:  "x then g separator ;",
+			input: "line1\nline2\nline3",
+			cmds: []Command{
+				NewRegexpCommand('x', regexp.MustCompile(".*line.*")),
+				NewRegexpCommand('g', regexp.MustCompile("1|3")),
+				NewPrintCommand(output, ";")},
+			expected: "line1;line3",
+		},
+		{
+			name:  "no match separator ;",
+			input: "line1\nline2\nline3",
+			cmds: []Command{
+				NewRegexpCommand('x', regexp.MustCompile(".*smoke.*")),			
+				NewPrintCommand(output, ";")},
+			expected: "",
 		},
 	}
 

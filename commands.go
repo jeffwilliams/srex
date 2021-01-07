@@ -7,6 +7,9 @@ import (
 	"regexp"
 )
 
+// Command represents a single stage in the pipeline of commands. It processes
+// `data` between `start` and `end` and if it finds a match calls `match` with the
+// start and end of the match.
 type Command interface {
 	Do(data io.ReaderAt, start, end int64, match func(start, end int64)) error
 }
@@ -16,6 +19,8 @@ type RegexpCommand struct {
 	//label  rune // "name" of the command: x, y, g..
 }
 
+// NewRegexpCommand returns a new Command that uses the specified Regexp.
+// The `label` chooses which Command to build; i.e. 'x' creates an XCommand.
 func NewRegexpCommand(label rune, re *regexp.Regexp) Command {
 	switch label {
 	case 'x':
@@ -77,7 +82,7 @@ func (c YCommand) Do(data io.ReaderAt, start, end int64, match func(start, end i
 		match(start, end)
 		return nil
 	}
-	
+
 	dbg("YCommand.Do: %d matches\n", len(matches))
 
 	lastIndex := start
@@ -115,8 +120,6 @@ func (c GCommand) Do(data io.ReaderAt, start, end int64, match func(start, end i
 		return nil
 	}
 
-	match(EmptyRange.Start, EmptyRange.End)
-
 	return nil
 }
 
@@ -127,38 +130,54 @@ type VCommand struct {
 
 func (c VCommand) Do(data io.ReaderAt, start, end int64, match func(start, end int64)) error {
 	buf, err := readRange(data, start, end)
-	
+
 	if err != nil {
 		dbg("VCommand.Do(%s): error %v\n", string(buf), err)
 		return err
 	}
-	
+
 	if c.RegexpCommand.regexp.Match(buf) {
 		dbg("VCommand.Do(%s): match at %d-%d\n", string(buf), start, end)
-		match(EmptyRange.Start, EmptyRange.End)
 		return nil
 	}
-	
+
 	match(start, end)
-	
+
 	return nil
 }
 
-// PrintCommand is like the sam editors p command.
-type PrintCommand struct{ Out io.Writer }
+// PrintCommand is like the sam editor's p command.
+type PrintCommand struct {
+	out      io.Writer
+	sep      []byte
+	printSep bool
+}
 
-func (p PrintCommand) Do(data io.ReaderAt, start, end int64, match func(start, end int64)) error {
+func (p *PrintCommand) Do(data io.ReaderAt, start, end int64, match func(start, end int64)) error {
 	buf, err := readRange(data, start, end)
+
+	dbg("PrintCommand.Do(%s)\n", string(buf))
 
 	if err != nil {
 		return err
 	}
 
-	if p.Out == nil {
-		p.Out = os.Stdout
+	if p.out == nil {
+		p.out = os.Stdout
 	}
 
-	p.Out.Write(buf)
+	if p.printSep && len(p.sep) > 0 {
+		p.out.Write(p.sep)
+	}
+
+	p.out.Write(buf)
+
+	p.printSep = true
 
 	return nil
+}
+
+// NewPrintCommand returns a new PrintCommand that writes to `out` and prints the separator `sep` between each match.
+func NewPrintCommand(out io.Writer, sep string) *PrintCommand {
+	return &PrintCommand{out: out, sep: []byte(sep)}
 }
