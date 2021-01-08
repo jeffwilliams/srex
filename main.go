@@ -11,29 +11,21 @@ import (
 	"github.com/ogier/pflag"
 )
 
-// Structural regular expressions, like in sam.
 // Using file seek, in case we are processing a large file
-// support:
-//		x// (looping over match)
-//		y// (looping over not match)
-//		g// (selecting matching objects)
-//		v// (selecting non-matching objects)
 
-// Usage:
-// <file> <commands>...
+func init() {
+	pflag.Usage = func() {
+		fmt.Fprintf(os.Stderr, "Usage: %s <file> <commands>\n", os.Args[0])
+		fmt.Printf("Apply structural regular expressions to the file, like in sam, and print the result to stdout. Supported commands:\n")
+		fmt.Printf("x// (looping over match)\n")
+		fmt.Printf("y// (looping over not match)\n")
+		fmt.Printf("g// (selecting matching objects)\n")
+		fmt.Printf("v// (selecting non-matching objects)\n")
+		fmt.Printf("\n")
 
-// To implement:
-// I think we can make this work on a stream. We can parse the regex twice:
-//	- Once the normal way to make the Regexp we use to parse the text
-//	- Once using the syntax/ package to get the Prog that we can use to find the Prefix() and
-//		StartCond that can be used to determine whether we even need to start matching in the stream yet.
-//
-// With that we can read from the stream and keep track of if we have seen the prefix or startcond yet.
-// If we haven't we can just drop or pass along those characters (as appropriate) until we see it, and
-// at that point start matching the regex. While we are matching the regex we need to store the
-// bytes read in memory so that we can index back into it once the match is complete.
-//
-// Now, will this work for y//
+		pflag.PrintDefaults()
+	}
+}
 
 func main() {
 	var err error
@@ -67,7 +59,10 @@ func main() {
 	err = processFile(file, commands, *optSep)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "%v", err)
+		os.Exit(1)
 	}
+
+	os.Exit(0)
 }
 
 func processFile(file *os.File, commands, sep string) error {
