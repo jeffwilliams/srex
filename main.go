@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"os"
@@ -35,37 +36,48 @@ import (
 // Now, will this work for y//
 
 func main() {
+	var err error
 
 	pflag.Parse()
+	debug = *optDebug
+	*optSep, err = replaceEscapes(*optSep)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Invalid escape character in separator\n")
+		os.Exit(1)
+	}
 
 	if len(pflag.Args()) < 1 {
-		fmt.Fprintf(os.Stderr, "The first argument must be a filename")
+		fmt.Fprintf(os.Stderr, "The first argument must be a filename\n")
 		os.Exit(1)
 	}
 	fname := pflag.Args()[0]
 
 	if len(pflag.Args()) < 2 {
-		fmt.Fprintf(os.Stderr, "There must be a command specified")
+		fmt.Fprintf(os.Stderr, "There must be a command specified\n")
 		os.Exit(1)
 	}
 	commands := pflag.Args()[1]
 
 	file, err := os.Open(fname)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "The first argument must be a filename")
+		fmt.Fprintf(os.Stderr, "The first argument must be a filename\n")
 		os.Exit(1)
 	}
 
-	processFile(file, commands)
+	err = processFile(file, commands, *optSep)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "%v", err)
+	}
 }
 
-func processFile(file *os.File, commands string) error {
+func processFile(file *os.File, commands, sep string) error {
 	cmds, err := parseCommands(commands)
 	if err != nil {
 		return err
 	}
 
 	ex := NewExecutor(cmds)
+	ex.Sep = sep
 	ex.Go(file)
 
 	return nil
@@ -105,7 +117,7 @@ func parseCommands(commands string) (result []Command, err error) {
 	for _, s := range strings.Fields(commands) {
 		cmdLabel := []rune(s)[0]
 		switch cmdLabel {
-		case 'x', 'y', 'g':
+		case 'x', 'y', 'g', 'v':
 			if len(s) < 3 {
 				err = fmt.Errorf("Command '%s' is malformatted", s)
 				return
@@ -117,12 +129,27 @@ func parseCommands(commands string) (result []Command, err error) {
 			}
 			cmd := NewRegexpCommand(cmdLabel, re)
 			result = append(result, cmd)
+		case 'p':
+			cmd := NewPrintCommand(os.Stdout, *optSep)
+			result = append(result, cmd)
+		default:
+			err = fmt.Errorf("Unknown command '%c'", cmdLabel)
+			return
 		}
 	}
 	return
 }
 
 func parseCommandRegexp(command string) (re *regexp.Regexp, err error) {
+	reText, err := extractCommandRegexpText(command)
+	if err != nil {
+		return
+	}
+	re, err = regexp.Compile(reText)
+	return
+}
+
+func extractCommandRegexpText(command string) (reText string, err error) {
 	// First char of the command is the command label, then it must be /.../
 	if len(command) < 3 {
 		err = fmt.Errorf("Command '%s' is malformatted", command)
@@ -139,8 +166,7 @@ func parseCommandRegexp(command string) (re *regexp.Regexp, err error) {
 		return
 	}
 
-	reText := command[1 : len(command)-1]
-	re, err = regexp.Compile(reText)
+	reText = command[2 : len(command)-1]
 	return
 }
 
@@ -150,6 +176,7 @@ func readRange(data io.ReaderAt, start, end int64) (buf []byte, err error) {
 	if err == io.EOF {
 		err = nil
 	}
+
 	return
 }
 
@@ -190,3 +217,29 @@ func readerAtSize(rd io.ReaderAt) (pos int64, err error) {
 	panic(errs.New("EOF is in a transient state"))
 }
 */
+
+func replaceEscapes(s string) (string, error) {
+	var b bytes.Buffer
+
+	esc := false
+	for _, r := range []rune(s) {
+		if !esc {
+			if r == '\\' {
+				esc = true
+			} else {
+				b.WriteRune(r)
+			}
+		} else {
+			switch r {
+			case 'n':
+				b.WriteRune('\n')
+			case '\\':
+				b.WriteRune('\\')
+			default:
+				return "", fmt.Errorf("Invalid escape character")
+			}
+			esc = false
+		}
+	}
+	return b.String(), nil
+}

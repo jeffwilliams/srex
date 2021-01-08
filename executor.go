@@ -74,6 +74,7 @@ func (ex *Executor) doCommandForStage(stage int) {
 
 	if stage == 0 {
 		// First stage reads from the reader directly
+		dbg("Stage %d is reading range %d-%d\n", stage, 0, ex.inputLength)
 		ex.commands[stage].Do(ex.input, 0, ex.inputLength, ex.writeRangeToChan(ex.firstChan()))
 	} else {
 		// Later stages read from a pipe

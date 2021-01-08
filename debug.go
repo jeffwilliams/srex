@@ -2,7 +2,7 @@ package main
 
 import "fmt"
 
-var debug = true
+var debug = false
 
 func dbg(msg string, args ...interface{}) {
 	if debug {

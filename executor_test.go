@@ -43,6 +43,18 @@ func TestLengthOfReader(t *testing.T) {
 	}
 
 }
+
+func TestExtractCommandRegexpText(t *testing.T) {
+	s,err := extractCommandRegexpText("x/blah/")
+	if err != nil {
+		t.Fatalf("Extracting text from x/blah/ failed: %v\n", err)
+	}
+	
+	if s != "blah" {
+		t.Fatalf("Extracted bad text: '%s'\n", s)
+	}
+}
+
 func TestPrintCommand(t *testing.T) {
 
 	buf := []byte("test!")
@@ -282,8 +294,7 @@ func TestExecutor(t *testing.T) {
 			ex.Go(buf)
 
 			s := output.String()
-			t.Logf("Expected '%s' and got '%s'", tc.expected, s)
-			t.Logf("Expected '%s' and got '%s'", tc.expected, s)
+			//t.Logf("Expected '%s' and got '%s'", tc.expected, s)
 			if s != tc.expected {
 				t.Fatalf("Expected '%s' but got '%s'", tc.expected, s)
 			}
