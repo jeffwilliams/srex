@@ -196,6 +196,14 @@ func TestExecutor(t *testing.T) {
 			expected: "line1\n\nline2",
 		},
 		{
+			name:  "y match at beginning",
+			input: "test\nline2",
+			cmds: []Command{
+				NewRegexpCommand('y', regexp.MustCompile("test")),
+				NewPrintCommand(output, "")},
+			expected: "\nline2",
+		},		
+		{
 			name:  "y no match",
 			input: "line1\n",
 			cmds: []Command{

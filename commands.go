@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
 	"io"
 	"os"
@@ -17,6 +18,8 @@ type Command interface {
 type RegexpCommand struct {
 	regexp *regexp.Regexp
 	//label  rune // "name" of the command: x, y, g..
+	secRdr *io.SectionReader
+	rdr *bufio.Reader
 }
 
 // NewRegexpCommand returns a new Command that uses the specified Regexp.
@@ -38,27 +41,38 @@ func NewRegexpCommand(label rune, re *regexp.Regexp) Command {
 	return nil
 }
 
+func (r *RegexpCommand) reader(data io.ReaderAt, start, end int64) io.RuneReader {
+	r.secRdr = io.NewSectionReader(data, start, end-start)
+	r.rdr = bufio.NewReader(r.secRdr)	
+	return r.rdr
+}
+
 // XCommand is like the sam editor's x command: loop over matches of this regexp
 type XCommand struct {
 	RegexpCommand
 }
 
 func (c XCommand) Do(data io.ReaderAt, start, end int64, match func(start, end int64)) error {
-	buf, err := readRange(data, start, end)
-
-	if err != nil {
-		return err
-	}
-
-	matches := c.RegexpCommand.regexp.FindAllSubmatchIndex(buf, -1)
-	if matches == nil {
-		dbg("XCommand.Do: no matches\n")
+	if emptyRange(start,end) {
 		return nil
 	}
 
-	for _, locs := range matches {
+	sr := io.NewSectionReader(data, start, end-start)
+	rdr := bufio.NewReader(sr)
+	dbg("XCommand.Do: section reader from %d len %d\n", start, end-start)
+
+	offset := start
+	for {
+		locs := c.RegexpCommand.regexp.FindReaderSubmatchIndex(rdr)
+		if locs == nil {
+			break
+		}
+		
 		dbg("XCommand.Do: match at %d-%d\n", locs[0], locs[1])
-		match(start+int64(locs[0]), start+int64(locs[1]))
+		match(offset+int64(locs[0]), offset+int64(locs[1]))
+		offset += int64(locs[1])
+		sr.Seek(offset-start, io.SeekStart)
+		rdr.Reset(sr)
 	}
 
 	return nil
@@ -70,34 +84,35 @@ type YCommand struct {
 }
 
 func (c YCommand) Do(data io.ReaderAt, start, end int64, match func(start, end int64)) error {
-	buf, err := readRange(data, start, end)
-
-	if err != nil {
-		return err
-	}
-
-	matches := c.RegexpCommand.regexp.FindAllSubmatchIndex(buf, -1)
-	if matches == nil {
-		dbg("YCommand.Do: no matches\n")
-		match(start, end)
+	if emptyRange(start,end) {
 		return nil
 	}
-
-	dbg("YCommand.Do: %d matches\n", len(matches))
-
-	lastIndex := start
-	for _, locs := range matches {
+	
+	sr := io.NewSectionReader(data, start, end-start)
+	rdr := bufio.NewReader(sr)
+	dbg("YCommand.Do: section reader from %d len %d\n", start, end-start)
+	
+	offset := start
+	for {
+		locs := c.RegexpCommand.regexp.FindReaderSubmatchIndex(rdr)
+		if locs == nil {
+			break
+		}
+		
 		dbg("YCommand.Do: re match at %d-%d\n", locs[0], locs[1])
-		dbg("YCommand.Do: sending match %d-%d\n", lastIndex, lastIndex+int64(locs[0]))
-
-		match(start+lastIndex, start+int64(locs[0]))
-		lastIndex = int64(locs[1])
+		dbg("YCommand.Do: sending match %d-%d\n", offset, offset+int64(locs[0]))
+		
+		match(offset, offset+int64(locs[0]))
+		
+		offset += int64(locs[1])
+		sr.Seek(offset-start, io.SeekStart)
+		rdr.Reset(sr)
 	}
-
-	if lastIndex != end {
-		match(lastIndex, end)
+	
+	if offset != end {
+		match(offset, end)
 	}
-
+	
 	return nil
 }
 
@@ -107,19 +122,20 @@ type GCommand struct {
 }
 
 func (c GCommand) Do(data io.ReaderAt, start, end int64, match func(start, end int64)) error {
-	buf, err := readRange(data, start, end)
-
-	if err != nil {
-		dbg("GCommand.Do(%s): error %v\n", string(buf), err)
-		return err
-	}
-
-	if c.RegexpCommand.regexp.Match(buf) {
-		dbg("GCommand.Do(%s): match at %d-%d\n", string(buf), start, end)
-		match(start, end)
+	if emptyRange(start,end) {
 		return nil
 	}
-
+	
+	sr := io.NewSectionReader(data, start, end-start)
+	rdr := bufio.NewReader(sr)
+	dbg("GCommand.Do: section reader from %d len %d\n", start, end-start)
+	
+	if c.RegexpCommand.regexp.MatchReader(rdr) {
+		dbg("GCommand.Do: match\n")
+		match(start, end)
+		return nil		
+	}
+	
 	return nil
 }
 

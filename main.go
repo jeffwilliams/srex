@@ -94,7 +94,7 @@ type Range struct {
 var EmptyRange = Range{}
 
 func emptyRange(start, end int64) bool {
-	return start == end
+	return end-start <= 0
 }
 
 func (r Range) IsEmpty() bool {
