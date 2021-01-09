@@ -17,9 +17,9 @@ type Command interface {
 
 type RegexpCommand struct {
 	regexp *regexp.Regexp
-	//label  rune // "name" of the command: x, y, g..
-	secRdr *io.SectionReader
-	rdr *bufio.Reader
+	secRdr         *io.SectionReader
+	rdr            *bufio.Reader
+	start, _offset int64
 }
 
 // NewRegexpCommand returns a new Command that uses the specified Regexp.
@@ -43,8 +43,20 @@ func NewRegexpCommand(label rune, re *regexp.Regexp) Command {
 
 func (r *RegexpCommand) reader(data io.ReaderAt, start, end int64) io.RuneReader {
 	r.secRdr = io.NewSectionReader(data, start, end-start)
-	r.rdr = bufio.NewReader(r.secRdr)	
+	r.rdr = bufio.NewReader(r.secRdr)
+	r.start = start
+	r._offset = start
 	return r.rdr
+}
+
+func (r *RegexpCommand) offset() int64 {
+	return r._offset
+}
+
+func (r *RegexpCommand) updateOffset(o int64) {
+	r._offset = o
+	r.secRdr.Seek(r._offset-r.start, io.SeekStart)
+	r.rdr.Reset(r.secRdr)
 }
 
 // XCommand is like the sam editor's x command: loop over matches of this regexp
@@ -53,26 +65,23 @@ type XCommand struct {
 }
 
 func (c XCommand) Do(data io.ReaderAt, start, end int64, match func(start, end int64)) error {
-	if emptyRange(start,end) {
+	if emptyRange(start, end) {
 		return nil
 	}
 
-	sr := io.NewSectionReader(data, start, end-start)
-	rdr := bufio.NewReader(sr)
+	rdr := c.reader(data, start, end)
 	dbg("XCommand.Do: section reader from %d len %d\n", start, end-start)
 
-	offset := start
 	for {
 		locs := c.RegexpCommand.regexp.FindReaderSubmatchIndex(rdr)
 		if locs == nil {
 			break
 		}
-		
+
 		dbg("XCommand.Do: match at %d-%d\n", locs[0], locs[1])
-		match(offset+int64(locs[0]), offset+int64(locs[1]))
-		offset += int64(locs[1])
-		sr.Seek(offset-start, io.SeekStart)
-		rdr.Reset(sr)
+		match(c.offset()+int64(locs[0]), c.offset()+int64(locs[1]))
+
+		c.updateOffset(c.offset() + int64(locs[1]))
 	}
 
 	return nil
@@ -84,35 +93,32 @@ type YCommand struct {
 }
 
 func (c YCommand) Do(data io.ReaderAt, start, end int64, match func(start, end int64)) error {
-	if emptyRange(start,end) {
+	if emptyRange(start, end) {
 		return nil
 	}
-	
-	sr := io.NewSectionReader(data, start, end-start)
-	rdr := bufio.NewReader(sr)
+
+	rdr := c.reader(data, start, end)
+
 	dbg("YCommand.Do: section reader from %d len %d\n", start, end-start)
-	
-	offset := start
+
 	for {
 		locs := c.RegexpCommand.regexp.FindReaderSubmatchIndex(rdr)
 		if locs == nil {
 			break
 		}
-		
+
 		dbg("YCommand.Do: re match at %d-%d\n", locs[0], locs[1])
-		dbg("YCommand.Do: sending match %d-%d\n", offset, offset+int64(locs[0]))
-		
-		match(offset, offset+int64(locs[0]))
-		
-		offset += int64(locs[1])
-		sr.Seek(offset-start, io.SeekStart)
-		rdr.Reset(sr)
+		dbg("YCommand.Do: sending match %d-%d\n", c.offset(), c.offset()+int64(locs[0]))
+
+		match(c.offset(), c.offset()+int64(locs[0]))
+
+		c.updateOffset(c.offset() + int64(locs[1]))
 	}
-	
-	if offset != end {
-		match(offset, end)
+
+	if c.offset() != end {
+		match(c.offset(), end)
 	}
-	
+
 	return nil
 }
 
@@ -122,20 +128,19 @@ type GCommand struct {
 }
 
 func (c GCommand) Do(data io.ReaderAt, start, end int64, match func(start, end int64)) error {
-	if emptyRange(start,end) {
+	if emptyRange(start, end) {
 		return nil
 	}
-	
-	sr := io.NewSectionReader(data, start, end-start)
-	rdr := bufio.NewReader(sr)
+
+	rdr := c.reader(data, start, end)
 	dbg("GCommand.Do: section reader from %d len %d\n", start, end-start)
-	
+
 	if c.RegexpCommand.regexp.MatchReader(rdr) {
 		dbg("GCommand.Do: match\n")
 		match(start, end)
-		return nil		
+		return nil
 	}
-	
+
 	return nil
 }
 
@@ -145,21 +150,22 @@ type VCommand struct {
 }
 
 func (c VCommand) Do(data io.ReaderAt, start, end int64, match func(start, end int64)) error {
-	buf, err := readRange(data, start, end)
-
-	if err != nil {
-		dbg("VCommand.Do(%s): error %v\n", string(buf), err)
-		return err
+	if emptyRange(start, end) {
+		return nil
 	}
 
-	if c.RegexpCommand.regexp.Match(buf) {
-		dbg("VCommand.Do(%s): match at %d-%d\n", string(buf), start, end)
+	rdr := c.reader(data, start, end)
+	dbg("GCommand.Do: section reader from %d len %d\n", start, end-start)
+
+	if c.RegexpCommand.regexp.MatchReader(rdr) {
+		dbg("GCommand.Do: match\n")
 		return nil
 	}
 
 	match(start, end)
 
 	return nil
+
 }
 
 // PrintCommand is like the sam editor's p command.
