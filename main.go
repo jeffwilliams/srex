@@ -6,7 +6,7 @@ import (
 	"io"
 	"os"
 	"regexp"
-	"strings"
+	"unicode"
 
 	"github.com/ogier/pflag"
 )
@@ -32,6 +32,9 @@ func main() {
 
 	pflag.Parse()
 	debug = *optDebug
+
+	dbg("Command line positional arguments after parsing: %#v\n", pflag.Args())
+
 	*optSep, err = replaceEscapes(*optSep)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Invalid escape character in separator\n")
@@ -58,7 +61,7 @@ func main() {
 
 	err = processFile(fname, file, commands, *optSep)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "%v", err)
+		fmt.Fprintf(os.Stderr, "%v\n", err)
 		os.Exit(1)
 	}
 
@@ -109,7 +112,7 @@ var completeRange = Range{-1, -1}
 
 func parseCommands(fname string, commands string) (result []Command, err error) {
 	result = []Command{}
-	for _, s := range strings.Fields(commands) {
+	for _, s := range tokenizeCommands(commands) {
 		cmdLabel := []rune(s)[0]
 		switch cmdLabel {
 		case 'x', 'y', 'g', 'v':
@@ -138,6 +141,38 @@ func parseCommands(fname string, commands string) (result []Command, err error) 
 	return
 }
 
+func tokenizeCommands(commands string) []string {
+	runes := []rune(commands)
+	cmds := []string{}
+	var cmd bytes.Buffer
+
+	inslash := false
+	for _, r := range runes {
+		if !inslash {
+			if unicode.IsSpace(r) {
+				continue
+			}
+			cmd.WriteRune(r)
+			if r == '/' {
+				inslash = true
+			}
+		} else {
+			cmd.WriteRune(r)
+			if r == '/' {
+				inslash = false
+				cmds = append(cmds, cmd.String())
+				cmd.Reset()
+			}
+		}
+	}
+
+	if cmd.Len() != 0 {
+		cmds = append(cmds, cmd.String())
+	}
+
+	return cmds
+}
+
 func parseCommandRegexp(command string) (re *regexp.Regexp, err error) {
 	reText, err := extractCommandRegexpText(command)
 	if err != nil {
@@ -155,12 +190,14 @@ func extractCommandRegexpText(command string) (reText string, err error) {
 	}
 
 	if command[1] != '/' {
-		err = fmt.Errorf("Command '%c' must be followed by a forward slash", command[0])
+		err = fmt.Errorf("Command '%c' must be followed by a forward slash (the complete command is: '%s')",
+			command[0], command)
 		return
 	}
 
 	if command[len(command)-1] != '/' {
-		err = fmt.Errorf("Command '%c' must be terminated by a forward slash", command[0])
+		err = fmt.Errorf("Command '%c' must be terminated by a forward slash (the complete command is: '%s')",
+			command[0], command)
 		return
 	}
 
