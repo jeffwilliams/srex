@@ -1,6 +1,6 @@
 # srex
 
-srex is a command-line tool to match sections of files using [Structural Regular Expressions](http://doc.cat-v.org/bell_labs/structural_regexps/). It implements the commands with a similar syntax as the [Sam](http://sam.cat-v.org/) editor, but only implements some of the commands. Notably omitted are the ones that modify the file -- this tool only prints out matches.
+srex is a command-line tool to match sections of files using Rob Pike's [Structural Regular Expressions](http://doc.cat-v.org/bell_labs/structural_regexps/). It implements the commands with a similar syntax as the [Sam](http://sam.cat-v.org/) editor, but only implements some of the commands. Notably omitted are the ones that modify the file -- this tool only prints out matches.
 
 The regular expression syntax is that from the Go [regexp package](https://golang.org/pkg/regexp/syntax/).
 
