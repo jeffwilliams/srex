@@ -130,8 +130,11 @@ func (ex Executor) addPrintCommandIfNeeded(commands []Command) (result []Command
 	if len(commands) == 0 {
 		add = true
 	} else {
-		if _, ok := commands[len(commands)-1].(*PrintCommand); !ok {
-			add = true
+		switch commands[len(commands)-1].(type) {
+			case *PrintCommand, *PrintLineCommand:
+				add = false
+			default:
+				add = true
 		}
 	}
 
