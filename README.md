@@ -1,6 +1,6 @@
 # srex
 
-srex is a command-line tool to match sections of files using [Structural Regular Expressions](http://doc.cat-v.org/bell_labs/structural_regexps/)(se). It implements the commands with a similar syntax as the [Sam](http://sam.cat-v.org/) editor, but only implements some of the commands. Notably omitted are the ones that modify the file -- this tool only prints out matches.
+srex is a command-line tool to match sections of files using [Structural Regular Expressions](http://doc.cat-v.org/bell_labs/structural_regexps/). It implements the commands with a similar syntax as the [Sam](http://sam.cat-v.org/) editor, but only implements some of the commands. Notably omitted are the ones that modify the file -- this tool only prints out matches.
 
 The regular expression syntax is that from the Go [regexp package](https://golang.org/pkg/regexp/syntax/).
 
@@ -27,10 +27,9 @@ The commands must all be embedded in a single command-line argument. This means 
 
 # Examples
 
-The primary motivation for this tool is to handle a use-case that occasionally comes up when using grep but isn't easy to handle: when the input consists of multi-line records, you want to select matching records, but you want to select the _entire_ record, not just the matching line in the record. The workaround usually involves tweaking the -A and -B grep options, but goesn't really handle the case well.
+The primary motivation for this tool is to handle a use-case that occasionally comes up when using grep but isn't easy to handle: when the input consists of multi-line records and you want to select matching records, but you want to select the _entire_ record not just the matching line in the record. The workaround using grep usually involves tweaking the -A and -B grep options, but doesn't really handle the case well.
 
-To illustrate, we'll  this event history from the output of a show command from a Cisco switch, taken from [here](https://www.cisco.com/c/m/en_us/techdoc/dc/reference/cli/n5k/commands/show-routing-ip-multicast-event-history.html), as the input file named 'example':
-
+To illustrate we'll take an input file and run some matches. We'll use this event-history output of a show command from a Cisco switch taken from [here](https://www.cisco.com/c/m/en_us/techdoc/dc/reference/cli/n5k/commands/show-routing-ip-multicast-event-history.html) as the input file named 'example':
 
     Msg events for MRIB Process
     1) Event:E_DEBUG, length:38, at 932956 usecs after Sat Apr 12 09:09:41 2008
@@ -64,11 +63,11 @@ To illustrate, we'll  this event history from the output of a show command from 
     <--Output truncated-->
     switch(config)#
     
-Notice that the history consists of a series of multi-line records. Each begins with 'N) Event:' and is followed by one or more space indented lines. We can select each of these records using:
+Notice that the history consists of a series of multi-line records. Each begins with 'N) Event:' and is followed by one or more space-indented lines. We can select each of these records using:
 
-    srex  example 'x/\d+\) Event:.*\n( +.*\n)*/'
+    srex example 'x/\d+\) Event:.*\n( +.*\n)*/'
     
-The first part of the regular expression `\d+\) Event:.*\n` matches the first line, and the next part `( +.*\n)*` matches the indented lines that follow the first as part of the record. This gives the output:
+Let's break down that regular expression inside the x//. The first part of the regular expression `\d+\) Event:.*\n` matches the first line, and the next part `( +.*\n)*` matches the indented lines that follow the first as part of the record. This gives the output:
 
     1) Event:E_DEBUG, length:38, at 932956 usecs after Sat Apr 12 09:09:41 2008
         [100] : nvdb: transient thread created
@@ -97,7 +96,7 @@ The first part of the regular expression `\d+\) Event:.*\n` matches the first li
     7) Event:E_MTS_RX, length:60, at 332954 usecs after Sat Apr 12 09:05:51 2008
         [RSP] Opc:MTS_OPC_MFDM_V4_ROUTE_STATS(75785), Id:0X000F0493, Ret:SUCCESS
 
-Since srex is just printing the matches verbatim this looks basically like the input file. Let's use a separator to clearly see the separate records. The `-s` or `--separator` argument specifies a separator to print between each record:
+This looks basically like the input file, since srex is just printing the matches verbatim. Let's use a separator to clearly see where the records begin and end. The `-s` or `--separator` argument specifies a string to print between each record:
 
     srex -s '----------\n' example 'x/\d+\) Event:.*\n( +.*\n)*/'
     
@@ -136,11 +135,11 @@ which gives us:
     7) Event:E_MTS_RX, length:60, at 332954 usecs after Sat Apr 12 09:05:51 2008
         [RSP] Opc:MTS_OPC_MFDM_V4_ROUTE_STATS(75785), Id:0X000F0493, Ret:SUCCESS
 
-Now let's only select the records that have the opcode related to ipv4 route statistics. For that we add a second command after the x// command to select specific records: the g// command:
+Now let's only select the records that have the opcode related to ipv4 route statistics. For that we add a second command after the `x//` command to select specific records: the `g//` command:
 
     srex  example 'x/\d+\) Event:.*\n( +.*\n)*/ g/MTS_OPC_MFDM_V4_ROUTE_STATS/'
 
-Which gives:
+This command gives:
 
     4) Event:E_MTS_RX, length:60, at 362578 usecs after Sat Apr 12 09:08:51 2008
         [RSP] Opc:MTS_OPC_MFDM_V4_ROUTE_STATS(75785), Id:0X000F217E, Ret:SUCCESS
@@ -163,8 +162,9 @@ Which gives:
     7) Event:E_MTS_RX, length:60, at 332954 usecs after Sat Apr 12 09:05:51 2008
         [RSP] Opc:MTS_OPC_MFDM_V4_ROUTE_STATS(75785), Id:0X000F0493, Ret:SUCCESS
 
-Note that the entire matching record is printed, not just the line with the opcode. Say instead we wanted to find
-all records that are _not_ about that opcode. We could use:
+Note that the entire matching record is printed, not just the line with the opcode. Because the g command is placed after the x command it only applies to records that the x command outputs. You can think of the commands as parts of a pipeline. 
+
+Say instead we wanted to find all records that are _not_ about that opcode. We could use:
 
     srex  example 'x/\d+\) Event:.*\n( +.*\n)*/ v/MTS_OPC_MFDM_V4_ROUTE_STATS/'
     
@@ -177,3 +177,15 @@ to get:
     3) Event:E_DEBUG, length:75, at 932264 usecs after Sat Apr 12 09:09:41 2008
         [100] : comp-mts-rx opc - from sap 3210 cmd mrib_internal_event_hist_command
 
+Say we wanted to again select all the records that have the opcode related to ipv4 route statistics as before, but now we want to only print their payloads, we could use an x// command to select the records, a g// command to filter for the opcode we care about, and then use a final x// command to extract the payload fields from the records:
+
+    srex  example 'x/\d+\) Event:.*\n( +.*\n)*/ g/MTS_OPC_MFDM_V4_ROUTE_STATS/ x/(\n\s*Payload.*)|(\n\s*0x.*)/'
+
+which gives:
+
+        Payload:
+        0x0000:  01 00 00 00 05 00 01 00 00 04 00 00 00 00 00 00
+        Payload:
+        0x0000:  01 00 00 00 05 00 01 00 00 04 00 00 00 00 00 00
+        Payload:
+        0x0000:  01 00 00 00 05 00 01 00 00 04 00 00 00 00 00 00
