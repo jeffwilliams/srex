@@ -16,7 +16,7 @@ type Command interface {
 }
 
 type RegexpCommand struct {
-	regexp *regexp.Regexp
+	regexp         *regexp.Regexp
 	secRdr         *io.SectionReader
 	rdr            *bufio.Reader
 	start, _offset int64
@@ -202,4 +202,65 @@ func (p *PrintCommand) Do(data io.ReaderAt, start, end int64, match func(start, 
 // NewPrintCommand returns a new PrintCommand that writes to `out` and prints the separator `sep` between each match.
 func NewPrintCommand(out io.Writer, sep string) *PrintCommand {
 	return &PrintCommand{out: out, sep: []byte(sep)}
+}
+
+// PrintLineCommand is like the sam editor's = command.
+type PrintLineCommand struct {
+	fname string
+	out   io.Writer
+}
+
+func NewPrintLineCommand(fname string, out io.Writer) *PrintLineCommand {
+	return &PrintLineCommand{fname: fname, out: out}
+}
+
+func (p *PrintLineCommand) Do(data io.ReaderAt, start, end int64, match func(start, end int64)) error {
+	dbg("PrintLineCommand.Do for %d-%d\n", start, end)
+
+	nl := 1
+	var (
+		err error
+		r   rune
+	)
+
+	sr := io.NewSectionReader(data, 0, start)
+	rdr := bufio.NewReader(sr)
+
+	readAndCount := func() {
+		for {
+			r, _, err = rdr.ReadRune()
+			if err != nil {
+				break
+			}
+
+			if r == '\n' {
+				nl++
+			}
+		}
+	}
+
+	// Re-read data and count the number of lines
+	readAndCount()
+
+	if err != io.EOF {
+		return err
+	}
+	p.out.Write([]byte(fmt.Sprintf("%s:%d", p.fname, nl)))
+
+	scnt := nl
+	sr = io.NewSectionReader(data, start, end)
+	rdr.Reset(sr)
+
+	readAndCount()
+
+	if err != io.EOF {
+		return err
+	}
+
+	if nl != scnt {
+		p.out.Write([]byte(fmt.Sprintf(",%d", nl)))
+	}
+	p.out.Write([]byte("\n"))
+
+	return nil
 }

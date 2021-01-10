@@ -289,6 +289,22 @@ func TestExecutor(t *testing.T) {
 				NewPrintCommand(output, ";")},
 			expected: "",
 		},
+		{
+			name:  "test print line",
+			input: "line1\nline2\nline3",
+			cmds: []Command{
+				NewRegexpCommand('x', regexp.MustCompile("line3")),			
+				NewPrintLineCommand("testfile", output)},
+			expected: "testfile:3\n",
+		},
+		{
+			name:  "test print line 2",
+			input: "line1\nline2\nline3\nline4",
+			cmds: []Command{
+				NewRegexpCommand('x', regexp.MustCompile("line3\nline4")),			
+				NewPrintLineCommand("testfile", output)},
+			expected: "testfile:3,4\n",
+		},			
 	}
 
 	for _, tc := range tests {

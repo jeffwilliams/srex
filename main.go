@@ -56,7 +56,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	err = processFile(file, commands, *optSep)
+	err = processFile(fname, file, commands, *optSep)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "%v", err)
 		os.Exit(1)
@@ -65,8 +65,8 @@ func main() {
 	os.Exit(0)
 }
 
-func processFile(file *os.File, commands, sep string) error {
-	cmds, err := parseCommands(commands)
+func processFile(fname string, file *os.File, commands, sep string) error {
+	cmds, err := parseCommands(fname, commands)
 	if err != nil {
 		return err
 	}
@@ -107,7 +107,7 @@ func (r Range) SectionReader(input io.ReaderAt) *io.SectionReader {
 
 var completeRange = Range{-1, -1}
 
-func parseCommands(commands string) (result []Command, err error) {
+func parseCommands(fname string, commands string) (result []Command, err error) {
 	result = []Command{}
 	for _, s := range strings.Fields(commands) {
 		cmdLabel := []rune(s)[0]
@@ -126,6 +126,9 @@ func parseCommands(commands string) (result []Command, err error) {
 			result = append(result, cmd)
 		case 'p':
 			cmd := NewPrintCommand(os.Stdout, *optSep)
+			result = append(result, cmd)
+		case '=':
+			cmd := NewPrintLineCommand(fname, os.Stdout)
 			result = append(result, cmd)
 		default:
 			err = fmt.Errorf("Unknown command '%c'", cmdLabel)
