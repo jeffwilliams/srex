@@ -2,6 +2,8 @@
 
 srex is a command-line tool to match sections of files using Rob Pike's [Structural Regular Expressions](http://doc.cat-v.org/bell_labs/structural_regexps/). It implements the commands with a similar syntax as the [Sam](http://sam.cat-v.org/) editor, but only implements some of the commands. Notably omitted are the ones that modify the file -- this tool only prints out matches.
 
+The primary motivation for this tool is to handle a use-case that occasionally comes up when using grep but isn't easy to handle: when the input consists of multi-line records and you want to select matching records, but you want to select the entire record not just the matching line in the record. The workaround using grep usually involves tweaking the -A and -B grep options, but doesn't really handle the case well.
+
 The regular expression syntax is that from the Go [regexp package](https://golang.org/pkg/regexp/syntax/).
 
 # Command syntax
@@ -27,9 +29,7 @@ The commands must all be embedded in a single command-line argument. This means 
 
 # Examples
 
-The primary motivation for this tool is to handle a use-case that occasionally comes up when using grep but isn't easy to handle: when the input consists of multi-line records and you want to select matching records, but you want to select the _entire_ record not just the matching line in the record. The workaround using grep usually involves tweaking the -A and -B grep options, but doesn't really handle the case well.
-
-To illustrate we'll take an input file and run some matches. We'll use this event-history output of a show command from a Cisco switch taken from [here](https://www.cisco.com/c/m/en_us/techdoc/dc/reference/cli/n5k/commands/show-routing-ip-multicast-event-history.html) as the input file named 'example':
+To illustrate the use-case described above we'll take an input file and run some matches. We'll use this event-history output of a show command from a Cisco switch taken from [here](https://www.cisco.com/c/m/en_us/techdoc/dc/reference/cli/n5k/commands/show-routing-ip-multicast-event-history.html) as the input file named 'example':
 
     Msg events for MRIB Process
     1) Event:E_DEBUG, length:38, at 932956 usecs after Sat Apr 12 09:09:41 2008
