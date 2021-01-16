@@ -248,7 +248,8 @@ func (p *PrintLineCommand) Do(data io.ReaderAt, start, end int64, match func(sta
 	p.out.Write([]byte(fmt.Sprintf("%s:%d", p.fname, nl)))
 
 	scnt := nl
-	sr = io.NewSectionReader(data, start, end)
+
+	sr = io.NewSectionReader(data, start, end-start)
 	rdr.Reset(sr)
 
 	readAndCount()

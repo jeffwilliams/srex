@@ -45,11 +45,11 @@ func TestLengthOfReader(t *testing.T) {
 }
 
 func TestExtractCommandRegexpText(t *testing.T) {
-	s,err := extractCommandRegexpText("x/blah/")
+	s, err := extractCommandRegexpText("x/blah/")
 	if err != nil {
 		t.Fatalf("Extracting text from x/blah/ failed: %v\n", err)
 	}
-	
+
 	if s != "blah" {
 		t.Fatalf("Extracted bad text: '%s'\n", s)
 	}
@@ -202,7 +202,7 @@ func TestExecutor(t *testing.T) {
 				NewRegexpCommand('y', regexp.MustCompile("test")),
 				NewPrintCommand(output, "")},
 			expected: "\nline2",
-		},		
+		},
 		{
 			name:  "y no match",
 			input: "line1\n",
@@ -285,7 +285,7 @@ func TestExecutor(t *testing.T) {
 			name:  "no match separator ;",
 			input: "line1\nline2\nline3",
 			cmds: []Command{
-				NewRegexpCommand('x', regexp.MustCompile(".*smoke.*")),			
+				NewRegexpCommand('x', regexp.MustCompile(".*smoke.*")),
 				NewPrintCommand(output, ";")},
 			expected: "",
 		},
@@ -293,7 +293,7 @@ func TestExecutor(t *testing.T) {
 			name:  "test print line",
 			input: "line1\nline2\nline3",
 			cmds: []Command{
-				NewRegexpCommand('x', regexp.MustCompile("line3")),			
+				NewRegexpCommand('x', regexp.MustCompile("line3")),
 				NewPrintLineCommand("testfile", output)},
 			expected: "testfile:3\n",
 		},
@@ -301,10 +301,45 @@ func TestExecutor(t *testing.T) {
 			name:  "test print line 2",
 			input: "line1\nline2\nline3\nline4",
 			cmds: []Command{
-				NewRegexpCommand('x', regexp.MustCompile("line3\nline4")),			
+				NewRegexpCommand('x', regexp.MustCompile("line3\nline4")),
 				NewPrintLineCommand("testfile", output)},
 			expected: "testfile:3,4\n",
-		},			
+		},
+		{
+			name: "test print line multi-line records",
+			input: `1) Entry 1
+  indented 
+2) Entry 2
+  indented   
+3) Entry 3
+  indented
+`,
+			cmds: []Command{
+				NewRegexpCommand('x', regexp.MustCompile(`\d+\) Entry.*\n( +.*\n)*`)),
+				NewPrintLineCommand("temp", output)},
+			expected: `temp:1,3
+temp:3,5
+temp:5,7
+`,
+		},
+		{
+			name: "test print line two-line records",
+			input: `1) Entry 1
+  indented 
+2) Entry 2
+  indented   
+3) Entry 3
+  indented
+`,
+			cmds: []Command{
+				NewRegexpCommand('x', regexp.MustCompile(`\d+\) Entry.*\n( +.*)*`)),
+				NewPrintLineCommand("temp", output)},
+			expected: `temp:1,2
+temp:3,4
+temp:5,6
+`,
+		},
+
 	}
 
 	for _, tc := range tests {
