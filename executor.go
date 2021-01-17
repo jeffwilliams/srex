@@ -89,6 +89,10 @@ func (ex *Executor) doCommandForStage(stage int) {
 		}
 	}
 
+	if doner, ok := ex.commands[stage].(Doner); ok {
+		doner.Done()
+	}
+	
 	if stage < len(ex.chans) {
 		close(ex.chans[stage])
 	}

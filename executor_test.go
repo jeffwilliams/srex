@@ -44,8 +44,8 @@ func TestLengthOfReader(t *testing.T) {
 
 }
 
-func TestExtractCommandRegexpText(t *testing.T) {
-	s, err := extractCommandRegexpText("x/blah/")
+func TestExtractCommandParameterText(t *testing.T) {
+	s, err := extractCommandParameter("x/blah/",'/','/')
 	if err != nil {
 		t.Fatalf("Extracting text from x/blah/ failed: %v\n", err)
 	}
@@ -53,6 +53,16 @@ func TestExtractCommandRegexpText(t *testing.T) {
 	if s != "blah" {
 		t.Fatalf("Extracted bad text: '%s'\n", s)
 	}
+	
+	s, err = extractCommandParameter("n[blah]",'[',']')
+	if err != nil {
+		t.Fatalf("Extracting text from n[blah] failed: %v\n", err)
+	}
+
+	if s != "blah" {
+		t.Fatalf("Extracted bad text: '%s'\n", s)
+	}
+	
 }
 
 func TestPrintCommand(t *testing.T) {
@@ -339,7 +349,70 @@ temp:3,4
 temp:5,6
 `,
 		},
-
+		{
+			name:  "n 1",
+			input: "line1\nline2\nline3\nline4\nline5",
+			cmds: []Command{
+				NewRegexpCommand('x', regexp.MustCompile("line.*")),
+				MustNCommand("1")},
+			expected: "line2",
+		},
+		{
+			name:  "n -1",
+			input: "line1\nline2\nline3\nline4\nline5",
+			cmds: []Command{
+				NewRegexpCommand('x', regexp.MustCompile("line.*")),
+				MustNCommand("-1")},
+			expected: "line5",
+		},	
+		{
+			name:  "n single line too big",
+			input: "line1\nline2\nline3\nline4\nline5",
+			cmds: []Command{
+				NewRegexpCommand('x', regexp.MustCompile("line.*")),
+				MustNCommand("20")},
+			expected: "",
+		},
+		{
+			name:  "n start and end",
+			input: "line1\nline2\nline3\nline4\nline5",
+			cmds: []Command{
+				NewRegexpCommand('x', regexp.MustCompile("line.*")),
+				MustNCommand("1:3")},
+			expected: "line2line3line4",
+		},
+		{
+			name:  "n 3 and 4",
+			input: "line1\nline2\nline3\nline4\nline5",
+			cmds: []Command{
+				NewRegexpCommand('x', regexp.MustCompile("line.*")),
+				MustNCommand("3:4")},
+			expected: "line4line5",
+		},		
+		{
+			name:  "n 2 to end",
+			input: "line1\nline2\nline3\nline4\nline5",
+			cmds: []Command{
+				NewRegexpCommand('x', regexp.MustCompile("line.*")),
+				MustNCommand("2:")},
+			expected: "line3line4line5",
+		},		
+		{
+			name:  "n 2 to second last",
+			input: "line1\nline2\nline3\nline4\nline5",
+			cmds: []Command{
+				NewRegexpCommand('x', regexp.MustCompile("line.*")),
+				MustNCommand("2:-1")},
+			expected: "line3line4",
+		},	
+		{
+			name:  "n invalid range",
+			input: "line1\nline2\nline3\nline4\nline5",
+			cmds: []Command{
+				NewRegexpCommand('x', regexp.MustCompile("line.*")),
+				MustNCommand("3:-3")},
+			expected: "",
+		},			
 	}
 
 	for _, tc := range tests {

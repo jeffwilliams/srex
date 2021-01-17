@@ -6,6 +6,8 @@ import (
 	"io"
 	"os"
 	"regexp"
+	"strconv"
+	"strings"
 )
 
 // Command represents a single stage in the pipeline of commands. It processes
@@ -13,6 +15,10 @@ import (
 // start and end of the match.
 type Command interface {
 	Do(data io.ReaderAt, start, end int64, match func(start, end int64)) error
+}
+
+type Doner interface {
+	Done() error
 }
 
 type RegexpCommand struct {
@@ -264,4 +270,102 @@ func (p *PrintLineCommand) Do(data io.ReaderAt, start, end int64, match func(sta
 	p.out.Write([]byte("\n"))
 
 	return nil
+}
+
+// NCommand only allows ranges in the range [first,last] to pass. Ranges
+// are counted starting from 0.
+// Syntax:
+// 	5  		sixth range
+//     5:6 		sixth and seventh ranges
+//	5:		sixth range to last
+//	0:-2		sixth range to second-last
+//     -1		last
+type NCommand struct {
+	// end == -1 means end is the last possible range.
+	// end == -2 means the second last range
+	start, end int
+	ranges     []Range
+	match      func(start, end int64)
+}
+
+func NewNCommand(s string) (*NCommand, error) {
+	cmd := &NCommand{}
+	var err error
+
+	parts := strings.Split(s, ":")
+	cmd.start, err = strconv.Atoi(parts[0])
+	if err != nil {
+		return nil, err
+	}
+
+	if len(parts) == 1 {
+		// a single number
+		cmd.end = cmd.start
+	} else {
+		if len(parts[1]) == 0 {
+			cmd.end = -1
+		} else {
+			cmd.end, err = strconv.Atoi(parts[1])
+			if err != nil {
+				return nil, err
+			}
+		}
+	}
+
+	return cmd, err
+}
+
+func MustNCommand(s string) *NCommand {
+	c, err := NewNCommand(s)
+	if err != nil {
+		panic(err)
+	}
+	return c
+}
+
+func (p *NCommand) Do(data io.ReaderAt, start, end int64, match func(start, end int64)) error {
+	p.saveRange(start, end)
+	p.match = match
+	return nil
+}
+
+func (p *NCommand) saveRange(start, end int64) {
+	if p.ranges == nil {
+		p.ranges = make([]Range, 0, 20)
+	}
+
+	p.ranges = append(p.ranges, Range{start, end})
+}
+
+func (p *NCommand) Done() error {
+	p.computeActualStart()
+	p.computeActualEnd()
+
+	if p.start > p.end {
+		// Treat this as the empty set
+		return nil
+	}
+
+	if p.start < 0 || p.end > len(p.ranges) {	
+		return nil
+	}
+	
+	for _, r := range p.ranges[p.start:p.end] {
+		p.match(r.Start, r.End)
+	}
+	return nil
+}
+
+func (p *NCommand) computeActualStart() {
+	if p.start < 0 {
+		p.start = len(p.ranges) + p.start
+	}
+}
+
+func (p *NCommand) computeActualEnd() {
+	if p.end >= 0 {
+		p.end += 1
+	} else {
+		p.end = len(p.ranges) + p.end + 1
+	}
 }

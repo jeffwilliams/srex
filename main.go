@@ -17,12 +17,20 @@ func init() {
 	pflag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "Usage: %s <file> <commands>\n", os.Args[0])
 		fmt.Printf("Apply structural regular expressions to the file, like in sam, and print the result to stdout. Supported commands:\n")
-		fmt.Printf("x// (looping over match)\n")
-		fmt.Printf("y// (looping over not match)\n")
-		fmt.Printf("g// (selecting matching objects)\n")
-		fmt.Printf("v// (selecting non-matching objects)\n")
+		fmt.Printf("x/pattern/ (looping over match)\n")
+		fmt.Printf("y/pattern/ (looping over not match)\n")
+		fmt.Printf("g/pattern/ (selecting matching objects)\n")
+		fmt.Printf("v/pattern/ (selecting non-matching objects)\n")
+		fmt.Printf("n[indexes] (select only the ranges with the specified indexes. Valid values:)\n")
+		fmt.Printf("   N   a single number selects the range N only. Ranges are counted starting from 0. If N is negative it specifies counts from the last element instead\n")
+		fmt.Printf("   N:M  select ranges who's index is >= N and <= M. M may be negative.\n")
+		fmt.Printf("   N:     select ranges who's index is >= N\n")
+		fmt.Printf("p (print the range. This is the default behaviour. This command is terminal.)\n")
+		fmt.Printf("= (print the file and line numbers of ranges. This command is terminal.)\n")
 		fmt.Printf("\n")
-
+		fmt.Printf("Commands can be composed into a pipeline of commands like so:")
+		fmt.Printf("x/pattern/ g/pattern/ n[5]")
+		
 		pflag.PrintDefaults()
 	}
 }
@@ -133,6 +141,13 @@ func parseCommands(fname string, commands string) (result []Command, err error) 
 		case '=':
 			cmd := NewPrintLineCommand(fname, os.Stdout)
 			result = append(result, cmd)
+		case 'n':
+			p, err := extractArraylikeCommandParameter(s)
+			cmd, err := NewNCommand(p)
+			if err != nil {
+				return nil, err
+			}
+			result = append(result, cmd)
 		default:
 			err = fmt.Errorf("Unknown command '%c'", cmdLabel)
 			return
@@ -142,39 +157,70 @@ func parseCommands(fname string, commands string) (result []Command, err error) 
 }
 
 func tokenizeCommands(commands string) []string {
-	runes := []rune(commands)
-	cmds := []string{}
-	var cmd bytes.Buffer
+	var t tokenizer
+	return t.tokenize(commands)
+}
 
-	inslash := false
-	for _, r := range runes {
-		if !inslash {
+type tokenizer struct {
+	runes []rune
+	cmd   bytes.Buffer
+	cmds  []string
+}
+
+func (t *tokenizer) tokenize(commands string) []string {
+	t.runes = []rune(commands)
+	t.innerTokenize()
+	return t.cmds
+}
+
+func (t *tokenizer) innerTokenize() {
+	const (
+		Default = iota
+		WaitingForTerminator
+	)
+
+	var state = Default
+	var terminator rune
+	for _, r := range t.runes {
+		switch state {
+		case Default:
 			if unicode.IsSpace(r) {
 				continue
 			}
-			cmd.WriteRune(r)
-			if r == '/' {
-				inslash = true
+			t.addRuneToCurrentCommand(r)
+			switch r {
+			case '/':
+				state = WaitingForTerminator
+				terminator = '/'
+			case '[':
+				state = WaitingForTerminator
+				terminator = ']'
 			}
-		} else {
-			cmd.WriteRune(r)
-			if r == '/' {
-				inslash = false
-				cmds = append(cmds, cmd.String())
-				cmd.Reset()
+		case WaitingForTerminator:
+			t.addRuneToCurrentCommand(r)
+			if r == terminator {
+				state = Default
+				t.addCommand()
 			}
 		}
 	}
 
-	if cmd.Len() != 0 {
-		cmds = append(cmds, cmd.String())
+	if t.cmd.Len() != 0 {
+		t.addCommand()
 	}
+}
 
-	return cmds
+func (t *tokenizer) addRuneToCurrentCommand(r rune) {
+	t.cmd.WriteRune(r)
+}
+
+func (t *tokenizer) addCommand() {
+	t.cmds = append(t.cmds, t.cmd.String())
+	t.cmd.Reset()
 }
 
 func parseCommandRegexp(command string) (re *regexp.Regexp, err error) {
-	reText, err := extractCommandRegexpText(command)
+	reText, err := extractRegexpCommandParameter(command)
 	if err != nil {
 		return
 	}
@@ -182,26 +228,34 @@ func parseCommandRegexp(command string) (re *regexp.Regexp, err error) {
 	return
 }
 
-func extractCommandRegexpText(command string) (reText string, err error) {
+func extractRegexpCommandParameter(command string) (param string, err error) {
+	return extractCommandParameter(command, '/', '/')
+}
+
+func extractArraylikeCommandParameter(command string) (param string, err error) {
+	return extractCommandParameter(command, '[', ']')
+}
+
+func extractCommandParameter(command string, lmark, rmark rune) (param string, err error) {
 	// First char of the command is the command label, then it must be /.../
 	if len(command) < 3 {
 		err = fmt.Errorf("Command '%s' is malformatted", command)
 		return
 	}
 
-	if command[1] != '/' {
+	if command[1] != byte(lmark) {
 		err = fmt.Errorf("Command '%c' must be followed by a forward slash (the complete command is: '%s')",
 			command[0], command)
 		return
 	}
 
-	if command[len(command)-1] != '/' {
+	if command[len(command)-1] != byte(rmark) {
 		err = fmt.Errorf("Command '%c' must be terminated by a forward slash (the complete command is: '%s')",
 			command[0], command)
 		return
 	}
 
-	reText = command[2 : len(command)-1]
+	param = command[2 : len(command)-1]
 	return
 }
 

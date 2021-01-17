@@ -35,6 +35,16 @@ func TestTokenizeCommands(t *testing.T) {
 			input:  "x/test/y/blort/",
 			output: []string{"x/test/", "y/blort/"},
 		},
+		{
+			name:   "extra spaces",
+			input:  "x/test/      y/blort/",
+			output: []string{"x/test/", "y/blort/"},
+		},		
+		{
+			name:   "n command",
+			input:  "x/test/ n[1:3]",
+			output: []string{"x/test/", "n[1:3]"},
+		},
 	}
 
 	for _, tc := range tests {

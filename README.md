@@ -16,6 +16,14 @@ The following Sam-like commands are supported:
    * **v/pattern/**      Compliment of g: Only run the subsequent command if the text does not match the pattern.
    * **p**            Print the matching text. This is the default command so may be omitted
    * **=**          Print the line numbers of the start and end of the match
+   
+There are also some commands not supported in sam: 
+
+   * **n[indexes]**	Only select the ranges with the specified indexes. Valid values for indexes include:
+   
+      1. N   a single number selects the range N only. Ranges are counted starting from 0. If N is negative it specifies counts from the last element instead
+      2. N:M  select ranges who's index is >= N and <= M. M may be negative.
+      3. N:     select ranges who's index is >= N
 
 # Usage
 
@@ -189,3 +197,7 @@ which gives:
         0x0000:  01 00 00 00 05 00 01 00 00 04 00 00 00 00 00 00
         Payload:
         0x0000:  01 00 00 00 05 00 01 00 00 04 00 00 00 00 00 00
+        
+# TODO
+
+Document an example for using the n[indexes] command.
