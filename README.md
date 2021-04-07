@@ -19,6 +19,7 @@ The following Sam-like commands are supported:
    
 There are also some commands not supported in sam: 
 
+   * **z/pattern/**      Loop over each match that starts with pattern and ends just before the start of the next match of pattern
    * **n[indexes]**	Only select the ranges with the specified indexes. Valid values for indexes include:
    
       1. N   a single number selects the range N only. Ranges are counted starting from 0. If N is negative it specifies counts from the last element instead

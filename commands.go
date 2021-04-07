@@ -40,6 +40,8 @@ func NewRegexpCommand(label rune, re *regexp.Regexp) Command {
 		return &YCommand{RegexpCommand{regexp: re}}
 	case 'v':
 		return &VCommand{RegexpCommand{regexp: re}}
+	case 'z':
+		return &ZCommand{RegexpCommand{regexp: re}, -1}
 	default:
 		panic(fmt.Sprintf("NewRegexpCommand: called with invalid command rune %c", label))
 	}
@@ -123,6 +125,46 @@ func (c YCommand) Do(data io.ReaderAt, start, end int64, match func(start, end i
 
 	if c.offset() != end {
 		match(c.offset(), end)
+	}
+
+	return nil
+}
+
+// YCommand is like the sam editor's y command, but instead of omitting the matching part, it is included
+// as part of the following match.
+type ZCommand struct {
+	RegexpCommand
+	matchStart int64
+}
+
+func (c ZCommand) Do(data io.ReaderAt, start, end int64, match func(start, end int64)) error {
+	if emptyRange(start, end) {
+		return nil
+	}
+
+	c.matchStart = -1
+
+	rdr := c.reader(data, start, end)
+	dbg("ZCommand.Do: section reader from %d len %d\n", start, end-start)
+
+	for {
+		locs := c.RegexpCommand.regexp.FindReaderSubmatchIndex(rdr)
+		if locs == nil {
+			break
+		}
+
+		dbg("ZCommand.Do: match starting at %d\n", locs[0])
+		if c.matchStart >= 0 {
+			dbg("ZCommand.Do: match at %d-%d. offset=%d\n", c.matchStart, c.offset()+int64(locs[0]), c.offset())
+			match(c.matchStart, c.offset()+int64(locs[0]))
+			c.matchStart = int64(locs[0])
+		}
+		c.matchStart = c.offset() + int64(locs[0])
+		c.updateOffset(c.offset() + int64(locs[1]))
+	}
+
+	if c.matchStart >= 0 && c.offset() != end {
+		match(c.matchStart, end)
 	}
 
 	return nil
@@ -346,10 +388,10 @@ func (p *NCommand) Done() error {
 		return nil
 	}
 
-	if p.start < 0 || p.end > len(p.ranges) {	
+	if p.start < 0 || p.end > len(p.ranges) {
 		return nil
 	}
-	
+
 	for _, r := range p.ranges[p.start:p.end] {
 		p.match(r.Start, r.End)
 	}

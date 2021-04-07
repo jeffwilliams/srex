@@ -45,7 +45,7 @@ func TestLengthOfReader(t *testing.T) {
 }
 
 func TestExtractCommandParameterText(t *testing.T) {
-	s, err := extractCommandParameter("x/blah/",'/','/')
+	s, err := extractCommandParameter("x/blah/", '/', '/')
 	if err != nil {
 		t.Fatalf("Extracting text from x/blah/ failed: %v\n", err)
 	}
@@ -53,8 +53,8 @@ func TestExtractCommandParameterText(t *testing.T) {
 	if s != "blah" {
 		t.Fatalf("Extracted bad text: '%s'\n", s)
 	}
-	
-	s, err = extractCommandParameter("n[blah]",'[',']')
+
+	s, err = extractCommandParameter("n[blah]", '[', ']')
 	if err != nil {
 		t.Fatalf("Extracting text from n[blah] failed: %v\n", err)
 	}
@@ -62,7 +62,7 @@ func TestExtractCommandParameterText(t *testing.T) {
 	if s != "blah" {
 		t.Fatalf("Extracted bad text: '%s'\n", s)
 	}
-	
+
 }
 
 func TestPrintCommand(t *testing.T) {
@@ -237,6 +237,32 @@ func TestExecutor(t *testing.T) {
 				NewPrintCommand(output, "")},
 			expected: "line1\n\nline2\narr",
 		},
+
+		{
+			name:  "z match",
+			input: "1) Entry 1\n  indented\n2) Entry 2\n  indented\n3) Entry 1\n  indented\n",
+			cmds: []Command{
+				NewRegexpCommand('z', regexp.MustCompile(`\d\)`)),
+				NewPrintCommand(output, "")},
+			expected: "1) Entry 1\n  indented\n2) Entry 2\n  indented\n3) Entry 1\n  indented\n",
+		},
+		{
+			name:  "z match with select",
+			input: "1) Entry 1\n  indented\n2) Entry 2\n  indented\n3) Entry 1\n  indented\n",
+			cmds: []Command{
+				NewRegexpCommand('z', regexp.MustCompile(`\d\)`)),
+				NewRegexpCommand('g', regexp.MustCompile(`2`)),
+				NewPrintCommand(output, "")},
+			expected: "2) Entry 2\n  indented\n",
+		},
+		{
+			name:  "z no match",
+			input: "1) Entry 1\n  indented\n2) Entry 2\n  indented\n3) Entry 1\n  indented\n",
+			cmds: []Command{
+				NewRegexpCommand('z', regexp.MustCompile(`verb`)),
+				NewPrintCommand(output, "")},
+			expected: "",
+		},
 		{
 			name:  "empty input, nonempty x",
 			input: "",
@@ -364,7 +390,7 @@ temp:5,6
 				NewRegexpCommand('x', regexp.MustCompile("line.*")),
 				MustNCommand("-1")},
 			expected: "line5",
-		},	
+		},
 		{
 			name:  "n single line too big",
 			input: "line1\nline2\nline3\nline4\nline5",
@@ -388,7 +414,7 @@ temp:5,6
 				NewRegexpCommand('x', regexp.MustCompile("line.*")),
 				MustNCommand("3:4")},
 			expected: "line4line5",
-		},		
+		},
 		{
 			name:  "n 2 to end",
 			input: "line1\nline2\nline3\nline4\nline5",
@@ -396,15 +422,15 @@ temp:5,6
 				NewRegexpCommand('x', regexp.MustCompile("line.*")),
 				MustNCommand("2:")},
 			expected: "line3line4line5",
-		},		
+		},
 		{
 			name:  "n 2 to second last",
 			input: "line1\nline2\nline3\nline4\nline5",
 			cmds: []Command{
 				NewRegexpCommand('x', regexp.MustCompile("line.*")),
-				MustNCommand("2:-1")},
+				MustNCommand("2:-2")},
 			expected: "line3line4",
-		},	
+		},
 		{
 			name:  "n invalid range",
 			input: "line1\nline2\nline3\nline4\nline5",
@@ -412,7 +438,7 @@ temp:5,6
 				NewRegexpCommand('x', regexp.MustCompile("line.*")),
 				MustNCommand("3:-3")},
 			expected: "",
-		},			
+		},
 	}
 
 	for _, tc := range tests {

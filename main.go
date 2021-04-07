@@ -19,6 +19,7 @@ func init() {
 		fmt.Printf("Apply structural regular expressions to the file, like in sam, and print the result to stdout. Supported commands:\n")
 		fmt.Printf("x/pattern/ (looping over match)\n")
 		fmt.Printf("y/pattern/ (looping over not match)\n")
+		fmt.Printf("z/pattern/ (looping over match plus everything after not including next match)\n")
 		fmt.Printf("g/pattern/ (selecting matching objects)\n")
 		fmt.Printf("v/pattern/ (selecting non-matching objects)\n")
 		fmt.Printf("n[indexes] (select only the ranges with the specified indexes. Valid values:)\n")
@@ -30,7 +31,7 @@ func init() {
 		fmt.Printf("\n")
 		fmt.Printf("Commands can be composed into a pipeline of commands like so:")
 		fmt.Printf("x/pattern/ g/pattern/ n[5]")
-		
+
 		pflag.PrintDefaults()
 	}
 }
@@ -123,7 +124,7 @@ func parseCommands(fname string, commands string) (result []Command, err error) 
 	for _, s := range tokenizeCommands(commands) {
 		cmdLabel := []rune(s)[0]
 		switch cmdLabel {
-		case 'x', 'y', 'g', 'v':
+		case 'x', 'y', 'g', 'v', 'z':
 			if len(s) < 3 {
 				err = fmt.Errorf("Command '%s' is malformatted", s)
 				return
@@ -260,6 +261,9 @@ func extractCommandParameter(command string, lmark, rmark rune) (param string, e
 }
 
 func readRange(data io.ReaderAt, start, end int64) (buf []byte, err error) {
+	if end < start {
+		panic(fmt.Sprintf("readRange: can't read range %d-%d", start, end))
+	}
 	buf = make([]byte, end-start)
 	_, err = data.ReadAt(buf, start)
 	if err == io.EOF {
