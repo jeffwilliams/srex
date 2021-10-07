@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"os"
 	"regexp"
 	"unicode"
@@ -15,8 +16,8 @@ import (
 
 func init() {
 	pflag.Usage = func() {
-		fmt.Fprintf(os.Stderr, "Usage: %s <file> <commands>\n", os.Args[0])
-		fmt.Printf("Apply structural regular expressions to the file, like in sam, and print the result to stdout. Supported commands:\n")
+		fmt.Fprintf(os.Stderr, "Usage: %s [file] <commands>\n", os.Args[0])
+		fmt.Printf("Apply structural regular expressions to the file or stdin, like in sam, and print the result to stdout. Supported commands:\n")
 		fmt.Printf("x/pattern/ (looping over match)\n")
 		fmt.Printf("y/pattern/ (looping over not match)\n")
 		fmt.Printf("z/pattern/ (looping over match plus everything after not including next match)\n")
@@ -51,30 +52,45 @@ func main() {
 	}
 
 	if len(pflag.Args()) < 1 {
-		fmt.Fprintf(os.Stderr, "The first argument must be a filename\n")
-		os.Exit(1)
-	}
-	fname := pflag.Args()[0]
-
-	if len(pflag.Args()) < 2 {
-		fmt.Fprintf(os.Stderr, "There must be a command specified\n")
-		os.Exit(1)
-	}
-	commands := pflag.Args()[1]
-
-	file, err := os.Open(fname)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "The first argument must be a filename\n")
+		fmt.Fprintf(os.Stderr, "A filename or command must be specified\n")
 		os.Exit(1)
 	}
 
-	err = processFile(fname, file, commands, *optSep)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "%v\n", err)
-		os.Exit(1)
+	var commands, fname string
+
+	if len(pflag.Args()) == 1 {
+		commands = pflag.Args()[0]
+	} else {
+		fname = pflag.Args()[0]
+		commands = pflag.Args()[1]
 	}
+
+	process(fname, commands)
 
 	os.Exit(0)
+}
+
+func process(fname, commands string) error {
+	if fname != "" {
+		file, err := os.Open(fname)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "When two arguments are specified, the first argument must be a filename\n")
+			os.Exit(1)
+		}
+
+		err = processFile(fname, file, commands, *optSep)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "%v\n", err)
+			os.Exit(1)
+		}
+	} else {
+		err := processStdin(commands, *optSep)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "%v\n", err)
+			os.Exit(1)
+		}
+	}
+	return nil
 }
 
 func processFile(fname string, file *os.File, commands, sep string) error {
@@ -86,6 +102,25 @@ func processFile(fname string, file *os.File, commands, sep string) error {
 	ex := NewExecutor(cmds)
 	ex.Sep = sep
 	ex.Go(file)
+
+	return nil
+}
+
+func processStdin(commands, sep string) error {
+	cmds, err := parseCommands("stdin", commands)
+	if err != nil {
+		return err
+	}
+
+	all, err := ioutil.ReadAll(os.Stdin)
+	if err != nil {
+		return err
+	}
+	buf := bytes.NewReader(all)
+
+	ex := NewExecutor(cmds)
+	ex.Sep = sep
+	ex.Go(buf)
 
 	return nil
 }
@@ -178,6 +213,7 @@ func (t *tokenizer) innerTokenize() {
 	const (
 		Default = iota
 		WaitingForTerminator
+		EscapeNext
 	)
 
 	var state = Default
@@ -199,10 +235,16 @@ func (t *tokenizer) innerTokenize() {
 			}
 		case WaitingForTerminator:
 			t.addRuneToCurrentCommand(r)
-			if r == terminator {
+			switch r {
+			case terminator:
 				state = Default
 				t.addCommand()
+			case '\\':
+				state = EscapeNext
 			}
+		case EscapeNext:
+			t.addRuneToCurrentCommand(r)
+			state = WaitingForTerminator
 		}
 	}
 

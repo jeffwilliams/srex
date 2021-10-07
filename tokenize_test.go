@@ -24,7 +24,7 @@ func TestTokenizeCommands(t *testing.T) {
 			name:   "double",
 			input:  "x/test/ y/blort/",
 			output: []string{"x/test/", "y/blort/"},
-		},		
+		},
 		{
 			name:   "x, y then p",
 			input:  "x/test/ y/blort/ p",
@@ -39,11 +39,16 @@ func TestTokenizeCommands(t *testing.T) {
 			name:   "extra spaces",
 			input:  "x/test/      y/blort/",
 			output: []string{"x/test/", "y/blort/"},
-		},		
+		},
 		{
 			name:   "n command",
 			input:  "x/test/ n[1:3]",
 			output: []string{"x/test/", "n[1:3]"},
+		},
+		{
+			name:   "escape",
+			input:  `x/\//`,
+			output: []string{`x/\//`},
 		},
 	}
 
