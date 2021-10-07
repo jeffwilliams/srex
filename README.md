@@ -31,6 +31,10 @@ There are also some commands not supported in sam:
 Invoke srex like so:
 
 		srex <file> <commands>
+
+Or like so:
+
+    <something> | srex <commands>
 		
 The commands must all be embedded in a single command-line argument. This means you'll generally surround them with single quotes. For example: 
 
@@ -199,6 +203,13 @@ which gives:
         Payload:
         0x0000:  01 00 00 00 05 00 01 00 00 04 00 00 00 00 00 00
         
+# Notes about Regular Expressions
+
+When matching a record, for example using the `x` command, the non-greedy zero-or-more repitition (`*?`) is useful. For example, when trying to crudely match C statements (which end in ';') you could use `x/(.|\n)*?;/`.
+
+Also useful is the `(?m)` flag to allow `^` to match the beginning of lines. For example, to strip out preprocessor lines from a C file you could use something like `x/(?m)^ *#.*\n/`.
+
+
 # TODO
 
 Document an example for using the n[indexes] command.
