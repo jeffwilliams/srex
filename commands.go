@@ -89,7 +89,12 @@ func (c XCommand) Do(data io.ReaderAt, start, end int64, match func(start, end i
 		dbg("XCommand.Do: match at %d-%d\n", locs[0], locs[1])
 		match(c.offset()+int64(locs[0]), c.offset()+int64(locs[1]))
 
-		c.updateOffset(c.offset() + int64(locs[1]))
+		delta := int64(locs[1])
+		if delta == 0 {
+			dbg("XCommand.Do: exiting because match did not make progress forward\n")
+			break
+		}
+		c.updateOffset(c.offset() + delta)
 	}
 
 	return nil
@@ -120,7 +125,12 @@ func (c YCommand) Do(data io.ReaderAt, start, end int64, match func(start, end i
 
 		match(c.offset(), c.offset()+int64(locs[0]))
 
-		c.updateOffset(c.offset() + int64(locs[1]))
+		delta := int64(locs[1])
+		if delta == 0 {
+			dbg("YCommand.Do: exiting because match did not make progress forward\n")
+			break
+		}
+		c.updateOffset(c.offset() + delta)
 	}
 
 	if c.offset() != end {
@@ -160,7 +170,14 @@ func (c ZCommand) Do(data io.ReaderAt, start, end int64, match func(start, end i
 			c.matchStart = int64(locs[0])
 		}
 		c.matchStart = c.offset() + int64(locs[0])
-		c.updateOffset(c.offset() + int64(locs[1]))
+
+		delta := int64(locs[1])
+		if delta == 0 {
+			dbg("ZCommand.Do: exiting because match did not make progress forward\n")
+			break
+		}
+
+		c.updateOffset(c.offset() + delta)
 	}
 
 	if c.matchStart >= 0 && c.offset() != end {

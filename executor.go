@@ -92,7 +92,7 @@ func (ex *Executor) doCommandForStage(stage int) {
 	if doner, ok := ex.commands[stage].(Doner); ok {
 		doner.Done()
 	}
-	
+
 	if stage < len(ex.chans) {
 		close(ex.chans[stage])
 	}
@@ -135,10 +135,10 @@ func (ex Executor) addPrintCommandIfNeeded(commands []Command) (result []Command
 		add = true
 	} else {
 		switch commands[len(commands)-1].(type) {
-			case *PrintCommand, *PrintLineCommand:
-				add = false
-			default:
-				add = true
+		case *PrintCommand, *PrintLineCommand:
+			add = false
+		default:
+			add = true
 		}
 	}
 

@@ -1,11 +1,14 @@
 package main
 
-import "fmt"
+import (
+	"fmt"
+	"os"
+)
 
 var debug = false
 
 func dbg(msg string, args ...interface{}) {
 	if debug {
-		fmt.Printf(msg, args...)
+		fmt.Fprintf(os.Stderr, msg, args...)
 	}
 }
