@@ -30,15 +30,21 @@ There are also some commands not supported in sam:
 
 Invoke srex like so:
 
-		srex <file> <commands>
+		srex [options] <file> <commands>
 
 Or like so:
 
-    <something> | srex <commands>
+    <something> | srex [options] <commands>
 		
 The commands must all be embedded in a single command-line argument. This means you'll generally surround them with single quotes. For example: 
 
 		srex software.log 'x/start(.|\n)*?end/ g/debug/'
+
+The following options may be specified:
+
+-s <sep>, --separator <sep>: Print the separator <sep> between matches. <sep> may contain \n to represent a newline.
+
+-d, --debug: Print debug statements to stderr
 
 # Examples
 
